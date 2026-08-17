@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Port Townsend — photoreal 3D</title>
+  <link rel="stylesheet" href="vendor/cesium/Widgets/widgets.css" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script>window.CESIUM_BASE_URL = "vendor/cesium/";</script>
+  <script src="vendor/cesium/Cesium.js"></script>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <div id="title-card">
+    <div class="title-inner">
+      <p class="eyebrow">Quimper Peninsula · Washington</p>
+      <h1>Port Townsend</h1>
+      <p class="subtitle">Photoreal 3D · Cesium ion</p>
+      <div class="rule"></div>
+      <div id="token-step">
+        <p class="token-lead">Paste your Cesium ion token. It stays in this browser.</p>
+        <p class="token-link"><a href="https://ion.cesium.com/tokens" target="_blank" rel="noopener">Get a token at ion.cesium.com/tokens</a></p>
+        <label class="token-field" for="token-input">
+          <input id="token-input" type="password" autocomplete="off" spellcheck="false" placeholder="Cesium ion token" />
+        </label>
+        <div class="title-actions">
+          <button id="token-save" type="button">Save token</button>
+        </div>
+      </div>
+      <div id="start-step" hidden>
+        <ul class="controls">
+          <li><kbd>Click</kbd> to look around</li>
+          <li><kbd>W A S D</kbd> walk</li>
+          <li><kbd>Shift</kbd> sprint</li>
+          <li><kbd>Space</kbd> float up · <kbd>C</kbd> descend</li>
+          <li><kbd>M</kbd> places · <kbd>V</kbd> speed</li>
+        </ul>
+        <ul class="controls touch-only">
+          <li>Left stick — walk</li>
+          <li>Right side — look around</li>
+          <li>Hold Sprint — run</li>
+          <li>Hold Up to float</li>
+        </ul>
+        <div class="title-actions">
+          <button id="start-btn" type="button">Start walking</button>
+          <button id="ra-start-btn" type="button">Start at Ready Athletics</button>
+        </div>
+        <p class="hint">Water Street faces the bay. Ready Athletics is the Rainier Street lot.</p>
+      </div>
+    </div>
+  </div>
+  <div id="hud" hidden>
+    <div id="hud-btns">
+      <button id="water-btn" type="button">Water St</button>
+      <button id="rainier-btn" type="button">Rainier</button>
+      <button id="fort-btn" type="button">Fort Worden</button>
+      <button id="map-btn" type="button">Places</button>
+      <button id="speed-btn" type="button">Speed</button>
+      <button id="token-btn" type="button">Token</button>
+    </div>
+    <div id="compass" aria-hidden="true">
+      <div class="compass-ring">
+        <span class="n">N</span>
+        <div id="compass-needle"></div>
+      </div>
+    </div>
+    <div id="near-label">
+      <strong id="near-name">Water Street</strong>
+      <span id="near-desc">Victorian storefronts one block off the bay</span>
+    </div>
+    <div id="crosshair"></div>
+    <div id="touch-ui" hidden>
+      <div id="stick" aria-hidden="true">
+        <div class="stick-base"></div>
+        <div id="stick-knob" class="stick-knob"></div>
+      </div>
+      <button id="sprint-btn" type="button">Sprint</button>
+      <div id="fly-btns">
+        <button id="up-btn" type="button">Up</button>
+        <button id="down-btn" type="button">Down</button>
+      </div>
+    </div>
+  </div>
+  <div id="map-overlay" hidden>
+    <div class="map-card">
+      <header class="map-head">
+        <h2>Port Townsend</h2>
+        <button id="map-close" type="button" aria-label="Close">x</button>
+      </header>
+      <ul class="place-list" id="place-list"></ul>
+    </div>
+  </div>
+  <div id="token-overlay" hidden>
+    <div class="map-card token-card" style="padding:1.1rem 1.2rem 1.2rem">
+      <h2>Cesium ion token</h2>
+      <p class="token-link"><a href="https://ion.cesium.com/tokens" target="_blank" rel="noopener">ion.cesium.com/tokens</a></p>
+      <label class="token-field" for="token-input-2">
+        <input id="token-input-2" type="password" autocomplete="off" spellcheck="false" placeholder="Cesium ion token" />
+      </label>
+      <div class="title-actions">
+        <button id="token-save-2" type="button">Save</button>
+        <button id="token-cancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+  <div id="speed-dash" hidden>
+    <div class="speed-head">
+      <h2>Speed</h2>
+      <button id="speed-reset" type="button">Reset</button>
+    </div>
+    <label class="speed-row">Walk <input id="spd-walk" type="range" min="1" max="20" step="0.1" /><span id="spd-walk-v"></span></label>
+    <label class="speed-row">Sprint <input id="spd-sprint" type="range" min="2" max="40" step="0.1" /><span id="spd-sprint-v"></span></label>
+    <label class="speed-row">Fly <input id="spd-fly" type="range" min="5" max="400" step="1" /><span id="spd-fly-v"></span></label>
+    <label class="speed-row">Rise <input id="spd-rise" type="range" min="2" max="80" step="0.5" /><span id="spd-rise-v"></span></label>
+  </div>
+  <div id="pause-hint" hidden>Click to keep walking</div>
+  <div id="error-banner" hidden></div>
+  <script src="js/main.js"></script>
+</body>
+</html>
