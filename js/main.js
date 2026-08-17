@@ -385,7 +385,7 @@
     const probed2 = sampleGround(afterPos);
     if (Number.isFinite(probed2)) lastGround = probed2;
     const g2 = Number.isFinite(lastGround) ? lastGround : after.height - EYE;
-    if (!rising) {
+    if (after.height < g2 + EYE) {
       after.height = g2 + EYE;
       cam.position = ellip.cartographicToCartesian(after);
     }
