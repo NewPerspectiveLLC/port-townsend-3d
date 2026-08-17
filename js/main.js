@@ -18,6 +18,7 @@
 
   let viewer = null;
   let lastGround = null;
+  let airborne = false;
   let started = false;
   let pointerLocked = false;
   let lookDX = 0;
@@ -228,6 +229,8 @@
     sscc.enableZoom = false;
     sscc.enableTilt = false;
     sscc.enableLook = false;
+    sscc.enableCollisionDetection = false;
+    sscc.enableInputs = false;
 
     let tileset;
     try {
@@ -253,6 +256,7 @@
   async function goTo(place) {
     if (!viewer || !place) return;
     setNear(place);
+    airborne = false;
     const carto = Cesium.Cartographic.fromDegrees(place.lon, place.lat);
     let height = 40;
     try {
@@ -339,12 +343,15 @@
 
     const carto = Cesium.Cartographic.fromCartesian(pos);
     const ground = sampleGround(pos);
-    if (Number.isFinite(ground)) lastGround = ground;
+    if (!airborne && Number.isFinite(ground)) lastGround = ground;
     const g = Number.isFinite(lastGround) ? lastGround : carto.height - EYE;
     const agl = carto.height - g;
-    const rising = keys.Space || holdUp;
+    const rising = keys.Space || keys.KeyE || holdUp;
     const sinking = keys.KeyC || keys.KeyQ || holdDown;
-    const flying = agl > FLY_AGL || rising || sinking;
+    if (rising) airborne = true;
+    if (sinking && agl <= EYE + 0.4) airborne = false;
+    if (!rising && !sinking && agl <= FLY_AGL) airborne = false;
+    const flying = airborne || agl > FLY_AGL || rising || sinking;
     const sprint = keys.ShiftLeft || keys.ShiftRight || holdSprint;
     const speed = flying ? speeds.fly : (sprint ? speeds.sprint : speeds.walk);
 
@@ -383,7 +390,7 @@
     const afterPos = cam.positionWC;
     const after = Cesium.Cartographic.fromCartesian(afterPos);
     const probed2 = sampleGround(afterPos);
-    if (Number.isFinite(probed2)) lastGround = probed2;
+    if (!airborne && Number.isFinite(probed2)) lastGround = probed2;
     const g2 = Number.isFinite(lastGround) ? lastGround : after.height - EYE;
     if (after.height < g2 + EYE) {
       after.height = g2 + EYE;
