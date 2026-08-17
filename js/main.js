@@ -272,23 +272,47 @@
     });
   }
 
-  function sampleGround(positionWC) {
+  function hitsDown(positionWC, east, north) {
     const ellip = Cesium.Ellipsoid.WGS84;
-    const up = ellip.geodeticSurfaceNormal(positionWC, new Cesium.Cartesian3());
-    const down = Cesium.Cartesian3.negate(up, new Cesium.Cartesian3());
-    const origin = Cesium.Cartesian3.add(
-      positionWC,
-      Cesium.Cartesian3.multiplyByScalar(up, 8, new Cesium.Cartesian3()),
-      new Cesium.Cartesian3()
-    );
-    const ray = new Cesium.Ray(origin, down);
-    let hit = null;
-    if (viewer.scene.pickFromRay) hit = viewer.scene.pickFromRay(ray);
-    if (hit && hit.position) {
-      const c = Cesium.Cartographic.fromCartesian(hit.position);
-      if (c && Number.isFinite(c.height)) return c.height;
+    const carto = Cesium.Cartographic.fromCartesian(positionWC);
+    if (east || north) {
+      carto.longitude += east / (111320 * Math.cos(carto.latitude));
+      carto.latitude += north / 111320;
     }
-    return lastGround;
+    const start = Cesium.Cartographic.clone(carto);
+    start.height = (Number.isFinite(lastGround) ? lastGround : carto.height) + 30;
+    const origin = ellip.cartographicToCartesian(start);
+    const up = ellip.geodeticSurfaceNormal(origin, new Cesium.Cartesian3());
+    const down = Cesium.Cartesian3.negate(up, new Cesium.Cartesian3());
+    const ray = new Cesium.Ray(origin, down);
+    const picks = viewer.scene.drillPickFromRay
+      ? viewer.scene.drillPickFromRay(ray, 16)
+      : (viewer.scene.pickFromRay ? [viewer.scene.pickFromRay(ray)] : []);
+    const heights = [];
+    (picks || []).forEach(function (hit) {
+      if (!hit || !hit.position) return;
+      const c = Cesium.Cartographic.fromCartesian(hit.position);
+      if (c && Number.isFinite(c.height)) heights.push(c.height);
+    });
+    return heights;
+  }
+
+  function sampleGround(positionWC) {
+    const offsets = [[0, 0], [1.8, 0], [-1.8, 0], [0, 1.8], [0, -1.8], [2.4, 2.4], [-2.4, 2.4]];
+    let all = [];
+    offsets.forEach(function (o) { all = all.concat(hitsDown(positionWC, o[0], o[1])); });
+    if (!all.length) return lastGround;
+    all.sort(function (a, b) { return a - b; });
+    const floor = Number.isFinite(lastGround) ? lastGround - 14 : all[0] - 4;
+    const usable = all.filter(function (h) { return h >= floor; });
+    if (!usable.length) return lastGround;
+    const road = usable[0];
+    const cluster = usable.filter(function (h) { return h <= road + 1.4; });
+    const raw = cluster[Math.floor(cluster.length / 2)];
+    if (!Number.isFinite(lastGround)) return raw;
+    if (raw < lastGround - 0.35) return raw;
+    if (raw > lastGround + 3.2) return lastGround;
+    return raw;
   }
 
   function onTick() {
@@ -356,9 +380,12 @@
       );
     }
 
-    const after = Cesium.Cartographic.fromCartesian(cam.positionWC);
+    const afterPos = cam.positionWC;
+    const after = Cesium.Cartographic.fromCartesian(afterPos);
+    const probed2 = sampleGround(afterPos);
+    if (Number.isFinite(probed2)) lastGround = probed2;
     const g2 = Number.isFinite(lastGround) ? lastGround : after.height - EYE;
-    if (!rising && after.height < g2 + EYE) {
+    if (!rising) {
       after.height = g2 + EYE;
       cam.position = ellip.cartographicToCartesian(after);
     }
