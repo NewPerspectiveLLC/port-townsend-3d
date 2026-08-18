@@ -331,8 +331,8 @@
     const up = ellip.geodeticSurfaceNormal(pos, new Cesium.Cartesian3());
 
     if (lookDX || lookDY) {
-      cam.look(up, lookDX * 0.0022);
-      cam.look(cam.right, lookDY * 0.0022);
+      cam.lookRight(lookDX * 0.0022);
+      cam.lookUp(-lookDY * 0.0022);
       const pitch = cam.pitch;
       const max = Cesium.Math.toRadians(85);
       if (pitch > max) cam.setView({ orientation: { heading: cam.heading, pitch: max, roll: 0 } });
