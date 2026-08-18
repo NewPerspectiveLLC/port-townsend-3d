@@ -224,14 +224,13 @@
       const res = await fetch("data/cappy-trails.json");
       const data = await res.json();
       (data.rings || []).forEach(function (flat) {
-        if (flat && flat.length >= 8 && trailNearParcel(flat)) rings.push(flat);
+        if (false) rings.push(flat);
       });
     } catch (_) {}
     if (Cesium.ClippingPolygon && Cesium.ClippingPolygonCollection) {
       tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({
         enabled: true,
         inverse: false,
-        quality: 2,
         polygons: rings.map(function (flat) {
           return new Cesium.ClippingPolygon({
             positions: Cesium.Cartesian3.fromDegreesArray(flat)
