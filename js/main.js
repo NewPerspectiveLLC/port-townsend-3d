@@ -33,6 +33,129 @@
   let speeds = loadSpeeds();
   const keys = Object.create(null);
 
+  const VORTEX_KEY = "pt-cesium-vortices";
+  const WEDGE_REACH = 80000;
+  const WEDGE_AGL = 26;
+  const DEFAULT_VORTICES = {
+    ra: { lon: -122.80591, lat: 48.11035 },
+    cappy: { lon: -122.799205, lat: 48.131646 }
+  };
+  let vortices = loadVortices();
+  let markTarget = "ra";
+  const wedgeGroups = { ra: [], cappy: [] };
+
+  function loadVortices() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(VORTEX_KEY) || "{}");
+      const pick = function (key) {
+        const src = raw[key] || {};
+        const fb = DEFAULT_VORTICES[key];
+        const lon = Number(src.lon);
+        const lat = Number(src.lat);
+        return {
+          lon: Number.isFinite(lon) ? lon : fb.lon,
+          lat: Number.isFinite(lat) ? lat : fb.lat
+        };
+      };
+      return { ra: pick("ra"), cappy: pick("cappy") };
+    } catch (e) {
+      return { ra: { lon: DEFAULT_VORTICES.ra.lon, lat: DEFAULT_VORTICES.ra.lat }, cappy: { lon: DEFAULT_VORTICES.cappy.lon, lat: DEFAULT_VORTICES.cappy.lat } };
+    }
+  }
+
+  function saveVortices() {
+    localStorage.setItem(VORTEX_KEY, JSON.stringify(vortices));
+  }
+
+  function destPoint(lon, lat, headingDeg, meters) {
+    const R = 6378137;
+    const h = headingDeg * Math.PI / 180;
+    const lat1 = lat * Math.PI / 180;
+    const lon1 = lon * Math.PI / 180;
+    const ang = meters / R;
+    const lat2 = Math.asin(Math.sin(lat1) * Math.cos(ang) + Math.cos(lat1) * Math.sin(ang) * Math.cos(h));
+    const lon2 = lon1 + Math.atan2(Math.sin(h) * Math.sin(ang) * Math.cos(lat1), Math.cos(ang) - Math.sin(lat1) * Math.sin(lat2));
+    return [lon2 * 180 / Math.PI, lat2 * 180 / Math.PI];
+  }
+
+  function clearWedges(id) {
+    (wedgeGroups[id] || []).forEach(function (e) { viewer.entities.remove(e); });
+    wedgeGroups[id] = [];
+  }
+
+  async function sampleVortexHeight(lon, lat) {
+    let h = 70;
+    try {
+      const sampled = await viewer.scene.sampleHeightMostDetailed([
+        Cesium.Cartographic.fromDegrees(lon, lat)
+      ]);
+      if (sampled && sampled[0] && Number.isFinite(sampled[0].height)) h = sampled[0].height;
+    } catch (e) {}
+    return h;
+  }
+
+  async function showWedges(id) {
+    if (!viewer) return;
+    clearWedges(id);
+    const v = vortices[id];
+    const glow = id === "ra" ? new Cesium.Color(0.85, 0.72, 0.32, 0.95) : new Cesium.Color(0.45, 0.85, 0.62, 0.95);
+    const shade = new Cesium.Color(0.04, 0.05, 0.05, 0.4);
+    const ground = await sampleVortexHeight(v.lon, v.lat);
+    const air = ground + WEDGE_AGL;
+    const glowMat = Cesium.PolylineGlowMaterialProperty
+      ? new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.22, taperPower: 0.75, color: glow })
+      : glow;
+    for (let i = 0; i < 12; i++) {
+      const end = destPoint(v.lon, v.lat, i * 30, WEDGE_REACH);
+      wedgeGroups[id].push(viewer.entities.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArrayHeights([v.lon, v.lat, air, end[0], end[1], air]),
+          width: 4,
+          material: glowMat
+        }
+      }));
+      wedgeGroups[id].push(viewer.entities.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArrayHeights([v.lon, v.lat, ground + 0.6, end[0], end[1], ground + 0.6]),
+          width: 7,
+          material: shade
+        }
+      }));
+    }
+    wedgeGroups[id].push(viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(v.lon, v.lat, air + 2),
+      point: { pixelSize: 11, color: glow, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 }
+    }));
+    const btn = $(id === "ra" ? "ra-wedge-btn" : "cappy-wedge-btn");
+    if (btn) btn.classList.add("active");
+  }
+
+  function hideWedges(id) {
+    clearWedges(id);
+    const btn = $(id === "ra" ? "ra-wedge-btn" : "cappy-wedge-btn");
+    if (btn) btn.classList.remove("active");
+  }
+
+  function toggleWedges(id) {
+    markTarget = id;
+    if (wedgeGroups[id] && wedgeGroups[id].length) hideWedges(id);
+    else showWedges(id);
+  }
+
+  function markVortexHere() {
+    if (!viewer) return;
+    const c = Cesium.Cartographic.fromCartesian(viewer.camera.positionWC);
+    vortices[markTarget] = {
+      lon: Cesium.Math.toDegrees(c.longitude),
+      lat: Cesium.Math.toDegrees(c.latitude)
+    };
+    saveVortices();
+    if (wedgeGroups[markTarget] && wedgeGroups[markTarget].length) showWedges(markTarget);
+    $("near-name").textContent = markTarget === "ra" ? "RA vortex marked" : "Cappy vortex marked";
+    $("near-desc").textContent = vortices[markTarget].lon.toFixed(6) + ", " + vortices[markTarget].lat.toFixed(6);
+  }
+
+
   function loadSpeeds() {
     try {
       const raw = JSON.parse(localStorage.getItem(SPEED_KEY) || "{}");
@@ -120,6 +243,9 @@
   $("fort-btn").addEventListener("click", () => goTo(findPlace("fort")));
   $("map-btn").addEventListener("click", toggleMap);
   $("map-close").addEventListener("click", () => { $("map-overlay").hidden = true; });
+  $("ra-wedge-btn").addEventListener("click", () => toggleWedges("ra"));
+  $("cappy-wedge-btn").addEventListener("click", () => toggleWedges("cappy"));
+  $("mark-vortex-btn").addEventListener("click", markVortexHere);
   $("speed-btn").addEventListener("click", toggleSpeed);
   $("speed-reset").addEventListener("click", () => {
     speeds = { ...DEFAULT_SPEEDS };
