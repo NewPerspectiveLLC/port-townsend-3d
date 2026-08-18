@@ -248,6 +248,34 @@ h1 {
 
 #hud-btns button:active, #hud-btns button.active { background: rgba(138, 58, 50, 0.85); }
 
+#wedge-btns {
+  position: absolute;
+  top: calc(2.55rem + env(safe-area-inset-top, 0px));
+  left: calc(0.75rem + env(safe-area-inset-left, 0px));
+  z-index: 11;
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  max-width: min(34rem, 92vw);
+}
+#wedge-btns button {
+  appearance: none;
+  border: 1px solid rgba(196, 163, 90, 0.9);
+  cursor: pointer;
+  background: rgba(196, 163, 90, 0.28);
+  color: var(--cream);
+  font-family: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  padding: 0.28rem 0.7rem;
+  min-height: 32px;
+  border-radius: 999px;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+#wedge-btns button.active { background: rgba(138, 58, 50, 0.9); }
+
 #compass { position: absolute; top: calc(4.6rem + env(safe-area-inset-top, 0px)); right: 1.1rem; }
 
 .compass-ring {
