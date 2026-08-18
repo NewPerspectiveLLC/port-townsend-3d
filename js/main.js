@@ -208,42 +208,83 @@
     lat: 48.131646,
     heading: 90,
     ring: [
-      -122.79900356780725, 48.131917012360034,
-      -122.79899721356229, 48.131376556605666,
-      -122.79940930130944, 48.131375701649965,
-      -122.79941137616784, 48.131917451683229
+      -122.79882, 48.13203,
+      -122.79881, 48.13126,
+      -122.79959, 48.13126,
+      -122.79960, 48.13203
     ]
   };
 
   async function applyCappyClearing(tileset) {
-    const positions = Cesium.Cartesian3.fromDegreesArray(CAPPY.ring);
+    if (tileset.readyPromise) {
+      try { await tileset.readyPromise; } catch (_) {}
+    }
+    const rings = [CAPPY.ring];
+    try {
+      const res = await fetch("data/cappy-trails.json");
+      const data = await res.json();
+      (data.rings || []).forEach(function (flat) {
+        if (flat && flat.length >= 8 && trailNearParcel(flat)) rings.push(flat);
+      });
+    } catch (_) {}
     if (Cesium.ClippingPolygon && Cesium.ClippingPolygonCollection) {
       tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({
-        polygons: [new Cesium.ClippingPolygon({ positions: positions })]
+        enabled: true,
+        inverse: false,
+        quality: 2,
+        polygons: rings.map(function (flat) {
+          return new Cesium.ClippingPolygon({
+            positions: Cesium.Cartesian3.fromDegreesArray(flat)
+          });
+        })
       });
     }
-    let groundH = 40;
+    let groundH = 70;
     try {
       const sampled = await viewer.scene.sampleHeightMostDetailed([
         Cesium.Cartographic.fromDegrees(CAPPY.lon, CAPPY.lat)
       ]);
       if (sampled && sampled[0] && Number.isFinite(sampled[0].height)) {
-        groundH = sampled[0].height - 8;
+        groundH = sampled[0].height - 18;
       }
     } catch (_) {}
-    viewer.entities.add({
-      name: "Cappy's Trails lot",
-      polygon: {
-        hierarchy: positions,
-        material: new Cesium.Color(0.42, 0.52, 0.32, 1),
-        height: groundH,
-        extrudedHeight: groundH + 0.25
-      }
+    rings.forEach(function (flat, i) {
+      viewer.entities.add({
+        name: i === 0 ? "Cappy parcel" : "Cappy trail",
+        polygon: {
+          hierarchy: Cesium.Cartesian3.fromDegreesArray(flat),
+          material: i === 0 ? new Cesium.Color(0.42, 0.52, 0.32, 1) : new Cesium.Color(0.45, 0.38, 0.28, 1),
+          height: groundH,
+          extrudedHeight: groundH + (i === 0 ? 0.3 : 0.18)
+        }
+      });
     });
+  }
+
+  function trailNearParcel(flat) {
+    let minD = Infinity;
+    let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+    for (let i = 0; i < flat.length; i += 2) {
+      const lon = flat[i];
+      const lat = flat[i + 1];
+      if (lon < minLon) minLon = lon;
+      if (lon > maxLon) maxLon = lon;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      const dx = (lon - CAPPY.lon) * 111320 * Math.cos(CAPPY.lat * Math.PI / 180);
+      const dy = (lat - CAPPY.lat) * 111320;
+      const d = Math.hypot(dx, dy);
+      if (d < minD) minD = d;
+    }
+    const w = (maxLon - minLon) * 111320 * Math.cos(CAPPY.lat * Math.PI / 180);
+    const h = (maxLat - minLat) * 111320;
+    if (Math.max(w, h) > 1600) return false;
+    return true;
   }
 
   async function initViewer(token) {
     if (typeof Cesium === "undefined") throw new Error("Cesium failed to load.");
+
     Cesium.Ion.defaultAccessToken = token;
 
     const opts = {
