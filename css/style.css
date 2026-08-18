@@ -218,16 +218,24 @@ h1 {
   z-index: 10;
 }
 
-#hud-btns {
+#hud-stack {
   position: absolute;
   top: calc(0.7rem + env(safe-area-inset-top, 0px));
   left: calc(0.75rem + env(safe-area-inset-left, 0px));
   z-index: 11;
   pointer-events: auto;
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  max-width: min(38rem, 92vw);
+}
+#hud-btns {
+  position: static;
+  display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-  max-width: min(26rem, 70vw);
+  max-width: 100%;
 }
 
 #hud-btns button {
@@ -249,15 +257,11 @@ h1 {
 #hud-btns button:active, #hud-btns button.active { background: rgba(138, 58, 50, 0.85); }
 
 #wedge-btns {
-  position: absolute;
-  top: calc(2.55rem + env(safe-area-inset-top, 0px));
-  left: calc(0.75rem + env(safe-area-inset-left, 0px));
-  z-index: 11;
-  pointer-events: auto;
+  position: static;
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-  max-width: min(34rem, 92vw);
+  max-width: 100%;
 }
 #wedge-btns button {
   appearance: none;

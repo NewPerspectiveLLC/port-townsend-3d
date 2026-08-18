@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Port Townsend — photoreal 3D</title>
   <link rel="stylesheet" href="vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="css/style.css?v=12" />
+  <link rel="stylesheet" href="css/style.css?v=13" />
   <script>window.CESIUM_BASE_URL = "vendor/cesium/";</script>
   <script src="vendor/cesium/Cesium.js"></script>
 </head>
@@ -53,19 +53,21 @@
     </div>
   </div>
   <div id="hud" hidden>
-    <div id="hud-btns">
-      <button id="water-btn" type="button">Water St</button>
-      <button id="rainier-btn" type="button">Rainier</button>
-      <button id="cappy-btn" type="button">Cappy's</button>
-      <button id="fort-btn" type="button">Fort Worden</button>
-      <button id="map-btn" type="button">Places</button>
-      <button id="speed-btn" type="button">Speed</button>
-      <button id="token-btn" type="button">Token</button>
-    </div>
-    <div id="wedge-btns">
-      <button id="ra-wedge-btn" type="button">RA 12-wedge</button>
-      <button id="cappy-wedge-btn" type="button">Cappy 12-wedge</button>
-      <button id="mark-vortex-btn" type="button">Mark vortex</button>
+    <div id="hud-stack">
+      <div id="hud-btns">
+        <button id="water-btn" type="button">Water St</button>
+        <button id="rainier-btn" type="button">Rainier</button>
+        <button id="cappy-btn" type="button">Cappy's</button>
+        <button id="fort-btn" type="button">Fort Worden</button>
+        <button id="map-btn" type="button">Places</button>
+        <button id="speed-btn" type="button">Speed</button>
+        <button id="token-btn" type="button">Token</button>
+      </div>
+      <div id="wedge-btns">
+        <button id="ra-wedge-btn" type="button">RA 12-wedge</button>
+        <button id="cappy-wedge-btn" type="button">Cappy 12-wedge</button>
+        <button id="mark-vortex-btn" type="button">Mark vortex</button>
+      </div>
     </div>
     <div id="compass" aria-hidden="true">
       <div class="compass-ring">
@@ -124,6 +126,6 @@
   </div>
   <div id="pause-hint" hidden>Click to keep walking</div>
   <div id="error-banner" hidden></div>
-  <script src="js/main.js?v=12"></script>
+  <script src="js/main.js?v=13"></script>
 </body>
 </html>
