@@ -8,6 +8,7 @@
   const PLACES = [
     { id: "water", name: "Water Street", desc: "Victorian storefronts one block off the bay", lon: -122.75398, lat: 48.11548, heading: 70 },
     { id: "rainier", name: "Ready Athletics", desc: "Rainier Street lot, meditation garden", lon: -122.80591, lat: 48.11035, heading: 50 },
+    { id: "cappy", name: "Cappy's Trails", desc: "Your parcel 998002802, Tacoma plat", lon: -122.799205, lat: 48.131646, heading: 90 },
     { id: "fort", name: "Fort Worden", desc: "Bluffs and batteries above the strait", lon: -122.7675, lat: 48.1410, heading: 40 },
     { id: "chet", name: "Chetzemoka Park", desc: "Lawns and trees above the water", lon: -122.7506, lat: 48.1216, heading: 90 }
   ];
@@ -115,6 +116,7 @@
   $("ra-start-btn").addEventListener("click", () => start("rainier"));
   $("water-btn").addEventListener("click", () => goTo(findPlace("water")));
   $("rainier-btn").addEventListener("click", () => goTo(findPlace("rainier")));
+  $("cappy-btn").addEventListener("click", () => goTo(findPlace("cappy")));
   $("fort-btn").addEventListener("click", () => goTo(findPlace("fort")));
   $("map-btn").addEventListener("click", toggleMap);
   $("map-close").addEventListener("click", () => { $("map-overlay").hidden = true; });
@@ -199,6 +201,47 @@
     }
   }
 
+  const CAPPY = {
+    id: "cappy",
+    pin: "998002802",
+    lon: -122.799205,
+    lat: 48.131646,
+    heading: 90,
+    ring: [
+      -122.79900356780725, 48.131917012360034,
+      -122.79899721356229, 48.131376556605666,
+      -122.79940930130944, 48.131375701649965,
+      -122.79941137616784, 48.131917451683229
+    ]
+  };
+
+  async function applyCappyClearing(tileset) {
+    const positions = Cesium.Cartesian3.fromDegreesArray(CAPPY.ring);
+    if (Cesium.ClippingPolygon && Cesium.ClippingPolygonCollection) {
+      tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({
+        polygons: [new Cesium.ClippingPolygon({ positions: positions })]
+      });
+    }
+    let groundH = 40;
+    try {
+      const sampled = await viewer.scene.sampleHeightMostDetailed([
+        Cesium.Cartographic.fromDegrees(CAPPY.lon, CAPPY.lat)
+      ]);
+      if (sampled && sampled[0] && Number.isFinite(sampled[0].height)) {
+        groundH = sampled[0].height - 8;
+      }
+    } catch (_) {}
+    viewer.entities.add({
+      name: "Cappy's Trails lot",
+      polygon: {
+        hierarchy: positions,
+        material: new Cesium.Color(0.42, 0.52, 0.32, 1),
+        height: groundH,
+        extrudedHeight: groundH + 0.25
+      }
+    });
+  }
+
   async function initViewer(token) {
     if (typeof Cesium === "undefined") throw new Error("Cesium failed to load.");
     Cesium.Ion.defaultAccessToken = token;
@@ -241,6 +284,7 @@
       throw new Error("Tiles failed to load. In ion.cesium.com, turn on Google Photorealistic 3D Tiles and check the token.");
     }
     viewer.scene.primitives.add(tileset);
+    await applyCappyClearing(tileset);
     viewer.scene.requestRenderMode = false;
     viewer.clock.onTick.addEventListener(onTick);
     bindLook();
