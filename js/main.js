@@ -375,12 +375,16 @@
     const up = ellip.geodeticSurfaceNormal(pos, new Cesium.Cartesian3());
 
     if (lookDX || lookDY) {
-      cam.lookRight(lookDX * 0.0022);
-      cam.lookUp(-lookDY * 0.0022);
-      const pitch = cam.pitch;
       const max = Cesium.Math.toRadians(85);
-      if (pitch > max) cam.setView({ orientation: { heading: cam.heading, pitch: max, roll: 0 } });
-      if (pitch < -max) cam.setView({ orientation: { heading: cam.heading, pitch: -max, roll: 0 } });
+      const pitch = Math.max(-max, Math.min(max, cam.pitch - lookDY * 0.0022));
+      cam.setView({
+        destination: Cesium.Cartesian3.clone(cam.positionWC),
+        orientation: {
+          heading: cam.heading + lookDX * 0.0022,
+          pitch: pitch,
+          roll: 0
+        }
+      });
       lookDX = 0;
       lookDY = 0;
     }
