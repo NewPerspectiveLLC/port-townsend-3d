@@ -67,6 +67,115 @@
     localStorage.setItem(VORTEX_KEY, JSON.stringify(vortices));
   }
 
+  const walker = {
+    model: null,
+    ready: false,
+    on: true,
+    t: 0,
+    dir: 1,
+    height: 8,
+    lastSample: 0,
+    a: null,
+    b: null,
+    pathM: 56
+  };
+
+  function haversineM(lon1, lat1, lon2, lat2) {
+    const R = 6378137;
+    const p1 = lat1 * Math.PI / 180;
+    const p2 = lat2 * Math.PI / 180;
+    const dp = (lat2 - lat1) * Math.PI / 180;
+    const dl = (lon2 - lon1) * Math.PI / 180;
+    const s = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+  }
+
+  function bearingDeg(lon1, lat1, lon2, lat2) {
+    const p1 = lat1 * Math.PI / 180;
+    const p2 = lat2 * Math.PI / 180;
+    const dl = (lon2 - lon1) * Math.PI / 180;
+    const y = Math.sin(dl) * Math.cos(p2);
+    const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  }
+
+  async function spawnMixamoWalker() {
+    if (!viewer || walker.model) return;
+    const water = findPlace("water");
+    const mid = destPoint(water.lon, water.lat, water.heading, 11);
+    walker.a = destPoint(mid[0], mid[1], water.heading + 90, 26);
+    walker.b = destPoint(mid[0], mid[1], water.heading + 90, -26);
+    walker.pathM = Math.max(8, haversineM(walker.a[0], walker.a[1], walker.b[0], walker.b[1]));
+    try {
+      const sampled = await viewer.scene.sampleHeightMostDetailed([
+        Cesium.Cartographic.fromDegrees(mid[0], mid[1])
+      ]);
+      if (sampled && sampled[0] && Number.isFinite(sampled[0].height)) walker.height = sampled[0].height;
+    } catch (e) {}
+    const model = await Cesium.Model.fromGltfAsync({
+      url: "models/xbot.glb",
+      scale: 1,
+      incrementallyLoadTextures: true,
+      gltfCallback: undefined
+    });
+    viewer.scene.primitives.add(model);
+    walker.model = model;
+    const waitReady = new Promise(function (resolve) {
+      if (model.ready) resolve();
+      else if (model.readyEvent) model.readyEvent.addEventListener(resolve);
+      else resolve();
+    });
+    await waitReady;
+    try {
+      model.activeAnimations.add({
+        name: "walk",
+        loop: Cesium.ModelAnimationLoop.REPEAT,
+        multiplier: 1
+      });
+    } catch (e) {
+      try { model.activeAnimations.addAll(); } catch (e2) {}
+    }
+    walker.ready = true;
+    placeWalker(0, 1);
+  }
+
+  function placeWalker(t, dir) {
+    if (!walker.model || !walker.a) return;
+    const lon = walker.a[0] + (walker.b[0] - walker.a[0]) * t;
+    const lat = walker.a[1] + (walker.b[1] - walker.a[1]) * t;
+    let hdg = bearingDeg(walker.a[0], walker.a[1], walker.b[0], walker.b[1]);
+    if (dir < 0) hdg = (hdg + 180) % 360;
+    const pos = Cesium.Cartesian3.fromDegrees(lon, lat, walker.height);
+    const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(hdg), 0, 0);
+    walker.model.modelMatrix = Cesium.Transforms.headingPitchRollToFixedFrame(pos, hpr);
+  }
+
+  function updateWalker(dt, now) {
+    if (!walker.on || !walker.ready || !walker.model) return;
+    walker.t += walker.dir * (1.35 * dt) / walker.pathM;
+    if (walker.t >= 1) { walker.t = 1; walker.dir = -1; }
+    if (walker.t <= 0) { walker.t = 0; walker.dir = 1; }
+    if (now - walker.lastSample > 400) {
+      walker.lastSample = now;
+      const lon = walker.a[0] + (walker.b[0] - walker.a[0]) * walker.t;
+      const lat = walker.a[1] + (walker.b[1] - walker.a[1]) * walker.t;
+      viewer.scene.sampleHeightMostDetailed([
+        Cesium.Cartographic.fromDegrees(lon, lat)
+      ]).then(function (sampled) {
+        if (sampled && sampled[0] && Number.isFinite(sampled[0].height)) walker.height = sampled[0].height;
+      }).catch(function () {});
+    }
+    placeWalker(walker.t, walker.dir);
+  }
+
+  function togglePeople() {
+    walker.on = !walker.on;
+    if (walker.model) walker.model.show = walker.on;
+    const btn = $("people-btn");
+    if (btn) btn.classList.toggle("active", walker.on);
+  }
+
+
   function destPoint(lon, lat, headingDeg, meters) {
     const R = 6378137;
     const h = headingDeg * Math.PI / 180;
@@ -243,6 +352,7 @@
   $("fort-btn").addEventListener("click", () => goTo(findPlace("fort")));
   $("map-btn").addEventListener("click", toggleMap);
   $("map-close").addEventListener("click", () => { $("map-overlay").hidden = true; });
+  $("people-btn").addEventListener("click", togglePeople);
   $("ra-wedge-btn").addEventListener("click", () => toggleWedges("ra"));
   $("cappy-wedge-btn").addEventListener("click", () => toggleWedges("cappy"));
   $("mark-vortex-btn").addEventListener("click", markVortexHere);
@@ -456,6 +566,7 @@
     bindLook();
     bindTouch();
     bindKeys();
+    spawnMixamoWalker().catch(function () {});
   }
 
   function setNear(place) {
@@ -534,6 +645,7 @@
     const now = performance.now();
     const dt = lastT ? Math.min(0.05, (now - lastT) / 1000) : 0.016;
     lastT = now;
+    updateWalker(dt, now);
 
     const cam = viewer.camera;
     const ellip = Cesium.Ellipsoid.WGS84;
