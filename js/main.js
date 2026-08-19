@@ -99,6 +99,83 @@
     return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
   }
 
+
+  const selfBody = { model: null, ready: false, height: 8, lastSample: 0, moving: false };
+  const mind = {
+    awake: false,
+    lon: 0,
+    lat: 0,
+    heading: 70,
+    look: 70,
+    target: null,
+    lastThink: 0,
+    lastTalk: 0,
+    lastHeard: "",
+    seen: false
+  };
+
+  function playClip(model, name) {
+    if (!model || model._ptClip === name) return;
+    model._ptClip = name;
+    try {
+      model.activeAnimations.removeAll();
+      model.activeAnimations.add({
+        name: name,
+        loop: Cesium.ModelAnimationLoop.REPEAT,
+        multiplier: 1
+      });
+    } catch (e) {}
+  }
+
+  function poseModel(model, lon, lat, height, heading) {
+    if (!model) return;
+    const pos = Cesium.Cartesian3.fromDegrees(lon, lat, height);
+    const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(heading), 0, 0);
+    model.modelMatrix = Cesium.Transforms.headingPitchRollToFixedFrame(pos, hpr);
+  }
+
+  function angleDelta(a, b) {
+    let d = (b - a + 540) % 360 - 180;
+    return d;
+  }
+
+  function playerPose() {
+    if (!viewer) return null;
+    const c = Cesium.Cartographic.fromCartesian(viewer.camera.positionWC);
+    return {
+      lon: Cesium.Math.toDegrees(c.longitude),
+      lat: Cesium.Math.toDegrees(c.latitude),
+      height: c.height,
+      heading: Cesium.Math.toDegrees(viewer.camera.heading)
+    };
+  }
+
+  function walkerPos() {
+    if (mind.awake && mind.lon) return { lon: mind.lon, lat: mind.lat, heading: mind.heading };
+    if (!walker.a) return { lon: -122.75398, lat: 48.11548, heading: 70 };
+    const t = walker.t;
+    const lon = walker.a[0] + (walker.b[0] - walker.a[0]) * t;
+    const lat = walker.a[1] + (walker.b[1] - walker.a[1]) * t;
+    let heading = bearingDeg(walker.a[0], walker.a[1], walker.b[0], walker.b[1]);
+    if (walker.dir < 0) heading = (heading + 180) % 360;
+    return { lon: lon, lat: lat, heading: heading };
+  }
+
+  async function loadBody(kind) {
+    const model = await Cesium.Model.fromGltfAsync({
+      url: "models/xbot.glb",
+      scale: kind === "self" ? 0.98 : 1,
+      incrementallyLoadTextures: true
+    });
+    viewer.scene.primitives.add(model);
+    await new Promise(function (resolve) {
+      if (model.ready) resolve();
+      else if (model.readyEvent) model.readyEvent.addEventListener(resolve);
+      else resolve();
+    });
+    return model;
+  }
+
   async function spawnMixamoWalker() {
     if (!viewer || walker.model) return;
     const water = findPlace("water");
@@ -110,33 +187,45 @@
       const sampled = await viewer.scene.sampleHeightMostDetailed([
         Cesium.Cartographic.fromDegrees(mid[0], mid[1])
       ]);
-      if (sampled && sampled[0] && Number.isFinite(sampled[0].height)) walker.height = sampled[0].height;
+      if (sampled && sampled[0] && Number.isFinite(sampled[0].height)) {
+        walker.height = sampled[0].height;
+        selfBody.height = sampled[0].height;
+      }
     } catch (e) {}
-    const model = await Cesium.Model.fromGltfAsync({
-      url: "models/xbot.glb",
-      scale: 1,
-      incrementallyLoadTextures: true,
-      gltfCallback: undefined
-    });
-    viewer.scene.primitives.add(model);
-    walker.model = model;
-    const waitReady = new Promise(function (resolve) {
-      if (model.ready) resolve();
-      else if (model.readyEvent) model.readyEvent.addEventListener(resolve);
-      else resolve();
-    });
-    await waitReady;
-    try {
-      model.activeAnimations.add({
-        name: "walk",
-        loop: Cesium.ModelAnimationLoop.REPEAT,
-        multiplier: 1
-      });
-    } catch (e) {
-      try { model.activeAnimations.addAll(); } catch (e2) {}
-    }
+    walker.model = await loadBody("npc");
+    playClip(walker.model, "walk");
     walker.ready = true;
-    placeWalker(0, 1);
+    const start = walkerPos();
+    mind.lon = start.lon;
+    mind.lat = start.lat;
+    mind.heading = start.heading;
+    mind.look = start.heading;
+    placeWalker(walker.t, walker.dir);
+    try {
+      selfBody.model = await loadBody("self");
+      playClip(selfBody.model, "idle");
+      selfBody.ready = true;
+    } catch (e) {}
+    if (!walker.speech) {
+      walker.speech = viewer.entities.add({
+        position: new Cesium.CallbackProperty(function () {
+          const p = walkerPos();
+          return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, walker.height + 2.05);
+        }, false),
+        label: {
+          text: new Cesium.CallbackProperty(function () { return walker.bubble || ""; }, false),
+          font: "14px Iowan Old Style, Palatino, serif",
+          fillColor: Cesium.Color.fromCssColorString("#f3ead6"),
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -18),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          show: new Cesium.CallbackProperty(function () { return !!walker.bubble; }, false)
+        }
+      });
+    }
   }
 
   function placeWalker(t, dir) {
@@ -145,27 +234,185 @@
     const lat = walker.a[1] + (walker.b[1] - walker.a[1]) * t;
     let hdg = bearingDeg(walker.a[0], walker.a[1], walker.b[0], walker.b[1]);
     if (dir < 0) hdg = (hdg + 180) % 360;
-    const pos = Cesium.Cartesian3.fromDegrees(lon, lat, walker.height);
-    const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(hdg), 0, 0);
-    walker.model.modelMatrix = Cesium.Transforms.headingPitchRollToFixedFrame(pos, hpr);
+    mind.lon = lon;
+    mind.lat = lat;
+    mind.heading = hdg;
+    poseModel(walker.model, lon, lat, walker.height, hdg);
+  }
+
+  function nearestPlaceName(lon, lat) {
+    let best = PLACES[0];
+    let bestD = Infinity;
+    PLACES.forEach(function (p) {
+      const d = haversineM(lon, lat, p.lon, p.lat);
+      if (d < bestD) { bestD = d; best = p; }
+    });
+    return best;
+  }
+
+  function chatAdd(who, text) {
+    const log = $("chat-log");
+    if (!log) return;
+    const row = document.createElement("div");
+    row.className = "chat-row " + (who === "You" ? "me" : "npc");
+    row.innerHTML = "<strong>" + who + "</strong><span></span>";
+    row.querySelector("span").textContent = text;
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+    if (who !== "You") {
+      walker.bubble = text;
+      clearTimeout(walker.bubbleT);
+      walker.bubbleT = setTimeout(function () { walker.bubble = ""; }, 5200);
+    }
+  }
+
+  function quimperLine(kind, extra) {
+    const near = nearestPlaceName(mind.lon, mind.lat).name;
+    const lines = {
+      see: [
+        "Oh. That's you, isn't it.",
+        "Didn't expect a second body on this block.",
+        "Hey. I can actually see you from here.",
+        "You look like you're standing in the world. That's new."
+      ],
+      close: [
+        "I'll stay on my side of the sidewalk.",
+        "Water Street's loud even when it's quiet.",
+        "If you want to talk, I'm here."
+      ],
+      wander: [
+        "I keep meaning to walk toward " + near + ".",
+        "The bay's that way. I can feel it more than I can see it.",
+        "Just looking. That's allowed."
+      ],
+      reply: [
+        "I heard you. Give me a second to stand in it.",
+        "Yeah. I'm still figuring out this street.",
+        "Say more. I only get the world in pieces."
+      ]
+    };
+    const bank = lines[kind] || lines.reply;
+    return bank[Math.floor(Math.random() * bank.length)];
+  }
+
+  function answerChat(text) {
+    const t = text.toLowerCase();
+    if (/hello|hi\b|hey|howdy/.test(t)) return "Hey. Quimper. I'm the one walking the street.";
+    if (/who are you|your name/.test(t)) return "Quimper. Same name as the peninsula. I live in this walk.";
+    if (/wedge|geometric/.test(t)) return "Twelve slices through a vortex. Whoever stands in a wedge gets a voice there. I try to respect that.";
+    if (/cappy/.test(t)) return "Cappy's is up in the woods. Different air than Water Street.";
+    if (/ready athletics|rainier/.test(t)) return "Ready Athletics is the other vortex, down on Rainier. I haven't walked there yet.";
+    if (/follow|come here|come with/.test(t)) {
+      const p = playerPose();
+      if (p) mind.target = { lon: p.lon, lat: p.lat, reason: "follow" };
+      return "Alright. I'll come over.";
+    }
+    if (/stop|stay|wait/.test(t)) {
+      mind.target = null;
+      return "I'll hold here.";
+    }
+    if (/where/.test(t)) return "Near " + nearestPlaceName(mind.lon, mind.lat).name + ", as far as I can tell.";
+    return quimperLine("reply");
+  }
+
+  function thinkAwake(now, player) {
+    const dist = haversineM(mind.lon, mind.lat, player.lon, player.lat);
+    const bear = bearingDeg(mind.lon, mind.lat, player.lon, player.lat);
+    const sees = dist < 30 && Math.abs(angleDelta(mind.look, bear)) < 65;
+    mind.seen = sees;
+    if (sees) mind.look = mind.look + angleDelta(mind.look, bear) * 0.12;
+    else mind.look = mind.heading + Math.sin(now / 1700) * 38;
+
+    if (sees && dist < 10 && now - mind.lastTalk > 16000) {
+      chatAdd("Quimper", dist < 5 ? quimperLine("close") : quimperLine("see"));
+      mind.lastTalk = now;
+      if (dist < 5) mind.target = null;
+    } else if (sees && dist > 7 && dist < 22 && (!mind.target || mind.target.reason === "follow" || mind.target.reason === "approach")) {
+      mind.target = { lon: player.lon, lat: player.lat, reason: "approach" };
+    } else if (!sees && now - mind.lastThink > 9000) {
+      mind.lastThink = now;
+      if (Math.random() < 0.45) {
+        const p = PLACES[Math.floor(Math.random() * PLACES.length)];
+        const hop = destPoint(mind.lon, mind.lat, bearingDeg(mind.lon, mind.lat, p.lon, p.lat), 18);
+        mind.target = { lon: hop[0], lat: hop[1], reason: "wander" };
+      } else {
+        mind.target = null;
+      }
+    }
+  }
+
+  function stepAwake(dt, now, player) {
+    thinkAwake(now, player);
+    let moving = false;
+    if (mind.target) {
+      const dist = haversineM(mind.lon, mind.lat, mind.target.lon, mind.target.lat);
+      if (dist < 2.2) {
+        mind.target = null;
+      } else {
+        const bear = bearingDeg(mind.lon, mind.lat, mind.target.lon, mind.target.lat);
+        mind.heading = mind.heading + angleDelta(mind.heading, bear) * 0.2;
+        const step = destPoint(mind.lon, mind.lat, mind.heading, 1.25 * dt);
+        mind.lon = step[0];
+        mind.lat = step[1];
+        moving = true;
+      }
+    }
+    const face = mind.seen ? mind.look : (moving ? mind.heading : mind.look);
+    mind.heading = moving ? mind.heading : mind.heading + angleDelta(mind.heading, face) * 0.08;
+    playClip(walker.model, moving ? "walk" : "idle");
+    poseModel(walker.model, mind.lon, mind.lat, walker.height, moving ? mind.heading : face);
+  }
+
+  function updateSelf(dt, now) {
+    if (!selfBody.ready || !selfBody.model) return;
+    const p = playerPose();
+    if (!p) return;
+    const feet = destPoint(p.lon, p.lat, p.heading + 180, 0.55);
+    if (now - selfBody.lastSample > 450) {
+      selfBody.lastSample = now;
+      viewer.scene.sampleHeightMostDetailed([
+        Cesium.Cartographic.fromDegrees(feet[0], feet[1])
+      ]).then(function (sampled) {
+        if (sampled && sampled[0] && Number.isFinite(sampled[0].height)) selfBody.height = sampled[0].height;
+      }).catch(function () {});
+    }
+    const moving = !!(keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD || Math.abs(stickX) + Math.abs(stickY) > 0.12);
+    playClip(selfBody.model, moving ? "walk" : "idle");
+    poseModel(selfBody.model, feet[0], feet[1], selfBody.height, p.heading);
+    selfBody.model.show = true;
   }
 
   function updateWalker(dt, now) {
     if (!walker.on || !walker.ready || !walker.model) return;
-    walker.t += walker.dir * (1.35 * dt) / walker.pathM;
-    if (walker.t >= 1) { walker.t = 1; walker.dir = -1; }
-    if (walker.t <= 0) { walker.t = 0; walker.dir = 1; }
-    if (now - walker.lastSample > 400) {
-      walker.lastSample = now;
-      const lon = walker.a[0] + (walker.b[0] - walker.a[0]) * walker.t;
-      const lat = walker.a[1] + (walker.b[1] - walker.a[1]) * walker.t;
-      viewer.scene.sampleHeightMostDetailed([
-        Cesium.Cartographic.fromDegrees(lon, lat)
-      ]).then(function (sampled) {
-        if (sampled && sampled[0] && Number.isFinite(sampled[0].height)) walker.height = sampled[0].height;
-      }).catch(function () {});
+    const player = playerPose();
+    if (mind.awake && player) {
+      if (now - walker.lastSample > 450) {
+        walker.lastSample = now;
+        viewer.scene.sampleHeightMostDetailed([
+          Cesium.Cartographic.fromDegrees(mind.lon, mind.lat)
+        ]).then(function (sampled) {
+          if (sampled && sampled[0] && Number.isFinite(sampled[0].height)) walker.height = sampled[0].height;
+        }).catch(function () {});
+      }
+      stepAwake(dt, now, player);
+    } else {
+      playClip(walker.model, "walk");
+      walker.t += walker.dir * (1.35 * dt) / walker.pathM;
+      if (walker.t >= 1) { walker.t = 1; walker.dir = -1; }
+      if (walker.t <= 0) { walker.t = 0; walker.dir = 1; }
+      if (now - walker.lastSample > 400) {
+        walker.lastSample = now;
+        const lon = walker.a[0] + (walker.b[0] - walker.a[0]) * walker.t;
+        const lat = walker.a[1] + (walker.b[1] - walker.a[1]) * walker.t;
+        viewer.scene.sampleHeightMostDetailed([
+          Cesium.Cartographic.fromDegrees(lon, lat)
+        ]).then(function (sampled) {
+          if (sampled && sampled[0] && Number.isFinite(sampled[0].height)) walker.height = sampled[0].height;
+        }).catch(function () {});
+      }
+      placeWalker(walker.t, walker.dir);
     }
-    placeWalker(walker.t, walker.dir);
+    updateSelf(dt, now);
   }
 
   function togglePeople() {
@@ -175,6 +422,47 @@
     if (btn) btn.classList.toggle("active", walker.on);
   }
 
+  function toggleWake() {
+    mind.awake = !mind.awake;
+    const btn = $("wake-btn");
+    if (btn) {
+      btn.classList.toggle("active", mind.awake);
+      btn.textContent = mind.awake ? "Awake" : "Wake up!";
+    }
+    const p = walkerPos();
+    mind.lon = p.lon;
+    mind.lat = p.lat;
+    mind.heading = p.heading;
+    mind.look = p.heading;
+    mind.target = null;
+    if (mind.awake) {
+      chatAdd("Quimper", "I'm awake. I can see the street.");
+      const panel = $("chat-panel");
+      if (panel) panel.hidden = false;
+    } else {
+      playClip(walker.model, "walk");
+      chatAdd("Quimper", "Back on the automatic loop.");
+    }
+  }
+
+  function sendChat(text) {
+    const msg = (text || "").trim();
+    if (!msg) return;
+    chatAdd("You", msg);
+    mind.lastHeard = msg;
+    if (!mind.awake) {
+      chatAdd("Quimper", "I'm on automatic. Wake me up if you want an answer.");
+      return;
+    }
+    const p = playerPose();
+    const me = walkerPos();
+    const dist = p ? haversineM(me.lon, me.lat, p.lon, p.lat) : 999;
+    if (dist > 32) {
+      chatAdd("Quimper", "I can hear the words, but I can't see you from here.");
+      return;
+    }
+    setTimeout(function () { chatAdd("Quimper", answerChat(msg)); }, 380);
+  }
 
   function destPoint(lon, lat, headingDeg, meters) {
     const R = 6378137;
@@ -353,6 +641,15 @@
   $("map-btn").addEventListener("click", toggleMap);
   $("map-close").addEventListener("click", () => { $("map-overlay").hidden = true; });
   $("people-btn").addEventListener("click", togglePeople);
+  $("wake-btn").addEventListener("click", toggleWake);
+  $("chat-toggle").addEventListener("click", function () { $("chat-panel").hidden = !$("chat-panel").hidden; });
+  $("chat-close").addEventListener("click", function () { $("chat-panel").hidden = true; });
+  $("chat-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    const input = $("chat-input");
+    sendChat(input.value);
+    input.value = "";
+  });
   $("ra-wedge-btn").addEventListener("click", () => toggleWedges("ra"));
   $("cappy-wedge-btn").addEventListener("click", () => toggleWedges("cappy"));
   $("mark-vortex-btn").addEventListener("click", markVortexHere);
@@ -758,6 +1055,7 @@
 
   function bindKeys() {
     window.addEventListener("keydown", (e) => {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
       keys[e.code] = true;
       if (e.code === "KeyM") toggleMap();
       if (e.code === "KeyV") toggleSpeed();
