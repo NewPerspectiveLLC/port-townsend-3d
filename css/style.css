@@ -753,6 +753,15 @@ body.touch #speed-dash {
   text-align: center;
   min-width: 8rem;
 }
+#npc-ball {
+  width: 34px;
+  height: 34px;
+  margin: 0 auto 0.25rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 32%, #fff6c8, #ffd24a 46%, #8a5a10);
+  box-shadow: 0 0 18px rgba(255, 210, 74, 0.9);
+  border: 2px solid #fff8d0;
+}
 #npc-arrow {
   font-size: 2.8rem;
   line-height: 1;

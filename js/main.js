@@ -75,11 +75,11 @@
     on: true,
     t: 0,
     dir: 1,
-    height: 8,
     lastSample: 0,
     a: null,
     b: null,
-    pathM: 56
+    pathM: 56,
+    height: NaN
   };
 
   function haversineM(lon1, lat1, lon2, lat2) {
@@ -129,39 +129,81 @@
     } catch (e) {}
   }
 
+  function goldBallImage() {
+    if (goldBallImage._url) return goldBallImage._url;
+    const c = document.createElement("canvas");
+    c.width = 128;
+    c.height = 128;
+    const g = c.getContext("2d");
+    const grd = g.createRadialGradient(46, 40, 8, 64, 64, 58);
+    grd.addColorStop(0, "#fff8d0");
+    grd.addColorStop(0.42, "#ffd24a");
+    grd.addColorStop(1, "rgba(120, 80, 10, 0.05)");
+    g.fillStyle = grd;
+    g.beginPath();
+    g.arc(64, 64, 56, 0, Math.PI * 2);
+    g.fill();
+    goldBallImage._url = c.toDataURL("image/png");
+    return goldBallImage._url;
+  }
+
+  function groundOf() {
+    if (Number.isFinite(walker.height)) return walker.height;
+    if (Number.isFinite(lastGround)) return lastGround;
+    return 0;
+  }
+
+  function markerPos() {
+    const p = walkerPos();
+    return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, groundOf() + 2.6);
+  }
+
   function addBeacon() {
-    if (!viewer || walker.beacon) return;
-    const gold = Cesium.Color.fromCssColorString("#ffd24a");
-    walker.beacon = viewer.entities.add({
-      position: new Cesium.CallbackProperty(function () {
-        const p = walkerPos();
-        return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, walker.height + 2.7);
-      }, false),
-      ellipsoid: {
-        radii: new Cesium.Cartesian3(0.75, 0.75, 0.75),
-        material: gold.withAlpha(0.95),
-        outline: true,
-        outlineColor: Cesium.Color.WHITE
-      },
-      point: {
-        pixelSize: 26,
-        color: gold,
-        outlineColor: Cesium.Color.WHITE,
-        outlineWidth: 3,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY
-      },
-      label: {
-        text: "QUIMPER",
-        font: "bold 18px Iowan Old Style, Palatino, serif",
-        fillColor: Cesium.Color.fromCssColorString("#f3ead6"),
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 4,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-        pixelOffset: new Cesium.Cartesian2(0, -28),
-        disableDepthTestDistance: Number.POSITIVE_INFINITY
-      }
+    if (!viewer || walker.ball) return;
+    if (!walker.a) {
+      const water = findPlace("water");
+      const mid = destPoint(water.lon, water.lat, water.heading, 11);
+      walker.a = destPoint(mid[0], mid[1], water.heading + 90, 26);
+      walker.b = destPoint(mid[0], mid[1], water.heading + 90, -26);
+    }
+    const balls = viewer.scene.primitives.add(new Cesium.BillboardCollection({
+      scene: viewer.scene
+    }));
+    walker.ball = balls.add({
+      position: markerPos(),
+      image: goldBallImage(),
+      width: 84,
+      height: 84,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      verticalOrigin: Cesium.VerticalOrigin.CENTER
     });
+    const labels = viewer.scene.primitives.add(new Cesium.LabelCollection({
+      scene: viewer.scene
+    }));
+    walker.tag = labels.add({
+      position: markerPos(),
+      text: "QUIMPER",
+      font: "bold 20px sans-serif",
+      fillColor: Cesium.Color.fromCssColorString("#f3ead6"),
+      outlineColor: Cesium.Color.BLACK,
+      outlineWidth: 5,
+      style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+      verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+      pixelOffset: new Cesium.Cartesian2(0, -46),
+      disableDepthTestDistance: Number.POSITIVE_INFINITY
+    });
+    walker.beacon = { show: true };
+  }
+
+  function updateBeacon() {
+    if (!walker.ball) return;
+    const pos = markerPos();
+    walker.ball.position = pos;
+    walker.ball.show = walker.on;
+    if (walker.tag) {
+      walker.tag.position = pos;
+      walker.tag.show = walker.on;
+    }
   }
 
   function poseModel(model, lon, lat, height, heading) {
@@ -199,17 +241,25 @@
   }
 
   async function loadBody(kind) {
-    const model = await Cesium.Model.fromGltfAsync({
-      url: "models/xbot.glb",
-      scale: kind === "self" ? 0.98 : 1,
-      incrementallyLoadTextures: true
-    });
+    const model = await Promise.race([
+      Cesium.Model.fromGltfAsync({
+        url: "models/xbot.glb",
+        scale: kind === "self" ? 0.98 : 1,
+        incrementallyLoadTextures: true
+      }),
+      new Promise(function (_, reject) {
+        setTimeout(function () { reject(new Error("gltf timeout")); }, 10000);
+      })
+    ]);
     viewer.scene.primitives.add(model);
-    await new Promise(function (resolve) {
-      if (model.ready) resolve();
-      else if (model.readyEvent) model.readyEvent.addEventListener(resolve);
-      else resolve();
-    });
+    await Promise.race([
+      new Promise(function (resolve) {
+        if (model.ready) resolve();
+        else if (model.readyEvent) model.readyEvent.addEventListener(resolve);
+        else resolve();
+      }),
+      new Promise(function (resolve) { setTimeout(resolve, 4000); })
+    ]);
     return model;
   }
 
@@ -229,6 +279,7 @@
         selfBody.height = sampled[0].height;
       }
     } catch (e) {}
+    addBeacon();
     try {
       walker.model = await loadBody("npc");
       playClip(walker.model, "walk");
@@ -236,7 +287,6 @@
       walker.model = null;
     }
     walker.ready = true;
-    addBeacon();
     const start = walkerPos();
     mind.lon = start.lon;
     mind.lat = start.lat;
@@ -252,7 +302,7 @@
       walker.speech = viewer.entities.add({
         position: new Cesium.CallbackProperty(function () {
           const p = walkerPos();
-          return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, walker.height + 2.05);
+          return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, groundOf() + 2.05);
         }, false),
         label: {
           text: new Cesium.CallbackProperty(function () { return walker.bubble || ""; }, false),
@@ -279,7 +329,7 @@
     mind.lon = lon;
     mind.lat = lat;
     mind.heading = hdg;
-    poseModel(walker.model, lon, lat, walker.height, hdg);
+    poseModel(walker.model, lon, lat, groundOf(), hdg);
   }
 
   function nearestPlaceName(lon, lat) {
@@ -415,7 +465,7 @@
     const face = mind.seen ? mind.look : (moving ? mind.heading : mind.look);
     mind.heading = moving ? mind.heading : mind.heading + angleDelta(mind.heading, face) * 0.08;
     playClip(walker.model, moving ? "walk" : "idle");
-    poseModel(walker.model, mind.lon, mind.lat, walker.height, moving ? mind.heading : face);
+    poseModel(walker.model, mind.lon, mind.lat, groundOf(), moving ? mind.heading : face);
   }
 
   function updateSelf(dt, now) {
@@ -473,7 +523,7 @@
   function togglePeople() {
     walker.on = !walker.on;
     if (walker.model) walker.model.show = walker.on;
-    if (walker.beacon) walker.beacon.show = walker.on;
+    updateBeacon();
     const btn = $("people-btn");
     if (btn) btn.classList.toggle("active", walker.on);
   }
@@ -629,6 +679,8 @@
       lat: stand[1],
       heading: look
     });
+    if (Number.isFinite(lastGround)) walker.height = lastGround;
+    updateBeacon();
     if (!mind.awake) toggleWake();
     const panel = $("chat-panel");
     if (panel) panel.hidden = false;
@@ -950,6 +1002,9 @@
       if (isTouch) $("touch-ui").hidden = false;
       started = true;
       await goTo(findPlace(placeId) || findPlace("water"));
+      addBeacon();
+      updateBeacon();
+      if (placeId === "water") findQuimper();
     } catch (err) {
       console.error(err);
       showError(err && err.message ? err.message : String(err));
@@ -1248,6 +1303,7 @@
     $("compass-needle").style.transform = "rotate(" + Cesium.Math.toDegrees(cam.heading) + "deg)";
     updateNearest(after);
     updateNpcWay();
+    updateBeacon();
   }
 
   function updateNearest(carto) {
