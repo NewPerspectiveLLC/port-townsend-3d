@@ -8,9 +8,33 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Port Townsend — photoreal 3D</title>
   <link rel="stylesheet" href="vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="css/style.css?v=18" />
+  <link rel="stylesheet" href="css/style.css?v=19" />
   <script>window.CESIUM_BASE_URL = "vendor/cesium/";</script>
-  <script src="vendor/cesium/Cesium.js"></script>
+  <script>
+    (function () {
+      var KEY = "pt-cesium-ion-token";
+      function fromStore() {
+        try { return (localStorage.getItem(KEY) || "").trim(); } catch (e) { return ""; }
+      }
+      function fromCookie() {
+        try {
+          var parts = document.cookie.split(";");
+          for (var i = 0; i < parts.length; i++) {
+            var part = parts[i].trim();
+            if (part.indexOf(KEY + "=") === 0) {
+              return decodeURIComponent(part.slice(KEY.length + 1)).trim();
+            }
+          }
+        } catch (e) {}
+        return "";
+      }
+      var t = fromStore() || fromCookie();
+      if (t) {
+        try { localStorage.setItem(KEY, t); } catch (e) {}
+        document.documentElement.classList.add("has-token");
+      }
+    })();
+  </script>
 </head>
 <body>
   <div id="cesiumContainer"></div>
@@ -21,7 +45,7 @@
       <p class="subtitle">Photoreal 3D · Cesium ion</p>
       <div class="rule"></div>
       <div id="token-step">
-        <p class="token-lead">Paste your Cesium ion token. It stays in this browser.</p>
+        <p class="token-lead">Paste your Cesium ion token once. This browser keeps it.</p>
         <p class="token-link"><a href="https://ion.cesium.com/tokens" target="_blank" rel="noopener">Get a token at ion.cesium.com/tokens</a></p>
         <label class="token-field" for="token-input">
           <input id="token-input" type="password" autocomplete="off" spellcheck="false" placeholder="Cesium ion token" />
@@ -150,6 +174,7 @@
     </form>
   </div>
   <div id="error-banner" hidden></div>
-  <script src="js/main.js?v=18"></script>
+  <script src="vendor/cesium/Cesium.js"></script>
+  <script src="js/main.js?v=19"></script>
 </body>
 </html>

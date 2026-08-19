@@ -764,23 +764,56 @@
     el.textContent = msg || "";
   }
 
+  function readCookie(name) {
+    try {
+      const parts = document.cookie.split(";");
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i].trim();
+        if (part.indexOf(name + "=") === 0) {
+          return decodeURIComponent(part.slice(name.length + 1)).trim();
+        }
+      }
+    } catch (e) {}
+    return "";
+  }
+
+  function writeCookie(name, value) {
+    try {
+      document.cookie = name + "=" + encodeURIComponent(value) +
+        ";path=/;max-age=31536000;SameSite=Lax;Secure";
+    } catch (e) {}
+  }
+
   function getToken() {
-    return (localStorage.getItem(TOKEN_KEY) || "").trim();
+    try {
+      const t = (localStorage.getItem(TOKEN_KEY) || "").trim();
+      if (t) return t;
+    } catch (e) {}
+    const c = readCookie(TOKEN_KEY);
+    if (c) {
+      try { localStorage.setItem(TOKEN_KEY, c); } catch (e) {}
+      return c;
+    }
+    return "";
   }
 
   function setToken(value) {
     const t = (value || "").trim();
     if (!t) return false;
-    localStorage.setItem(TOKEN_KEY, t);
+    try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {}
+    writeCookie(TOKEN_KEY, t);
+    document.documentElement.classList.add("has-token");
     return true;
   }
 
   function showStart() {
+    document.documentElement.classList.add("has-token");
     $("token-step").hidden = true;
     $("start-step").hidden = false;
   }
 
   function showTokenStep() {
+    document.documentElement.classList.remove("has-token");
     $("token-step").hidden = false;
     $("start-step").hidden = true;
   }

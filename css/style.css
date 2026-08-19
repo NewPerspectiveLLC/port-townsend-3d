@@ -127,6 +127,10 @@ h1 {
   background: rgba(0, 0, 0, 0.2);
 }
 
+html.has-token #token-step { display: none !important; }
+html.has-token #start-step { display: block !important; }
+html:not(.has-token) #start-step { display: none !important; }
+
 .token-lead {
   font-size: 0.98rem;
   line-height: 1.45;
