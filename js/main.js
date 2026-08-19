@@ -131,16 +131,24 @@
 
   function addBeacon() {
     if (!viewer || walker.beacon) return;
+    const gold = Cesium.Color.fromCssColorString("#ffd24a");
     walker.beacon = viewer.entities.add({
       position: new Cesium.CallbackProperty(function () {
         const p = walkerPos();
-        return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, walker.height + 6);
+        return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, walker.height + 2.7);
       }, false),
-      cylinder: {
-        length: 14,
-        topRadius: 0.18,
-        bottomRadius: 0.35,
-        material: Cesium.Color.fromCssColorString("#c4a35a").withAlpha(0.62)
+      ellipsoid: {
+        radii: new Cesium.Cartesian3(0.75, 0.75, 0.75),
+        material: gold.withAlpha(0.95),
+        outline: true,
+        outlineColor: Cesium.Color.WHITE
+      },
+      point: {
+        pixelSize: 26,
+        color: gold,
+        outlineColor: Cesium.Color.WHITE,
+        outlineWidth: 3,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY
       },
       label: {
         text: "QUIMPER",
@@ -150,7 +158,7 @@
         outlineWidth: 4,
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-        pixelOffset: new Cesium.Cartesian2(0, -36),
+        pixelOffset: new Cesium.Cartesian2(0, -28),
         disableDepthTestDistance: Number.POSITIVE_INFINITY
       }
     });
@@ -465,6 +473,7 @@
   function togglePeople() {
     walker.on = !walker.on;
     if (walker.model) walker.model.show = walker.on;
+    if (walker.beacon) walker.beacon.show = walker.on;
     const btn = $("people-btn");
     if (btn) btn.classList.toggle("active", walker.on);
   }
@@ -1078,6 +1087,7 @@
     bindLook();
     bindTouch();
     bindKeys();
+    addBeacon();
     spawnMixamoWalker().catch(function () {});
   }
 
