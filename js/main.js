@@ -129,6 +129,28 @@
     } catch (e) {}
   }
 
+  function personImage() {
+    if (personImage._url) return personImage._url;
+    const c = document.createElement("canvas");
+    c.width = 256;
+    c.height = 512;
+    const g = c.getContext("2d");
+    g.fillStyle = "#f0c8a0";
+    g.beginPath();
+    g.arc(128, 70, 50, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#c45c3a";
+    g.fillRect(74, 118, 108, 160);
+    g.fillStyle = "#f0c8a0";
+    g.fillRect(30, 125, 44, 140);
+    g.fillRect(182, 125, 44, 140);
+    g.fillStyle = "#2f3d52";
+    g.fillRect(84, 276, 40, 210);
+    g.fillRect(132, 276, 40, 210);
+    personImage._url = c.toDataURL("image/png");
+    return personImage._url;
+  }
+
   function goldBallImage() {
     if (goldBallImage._url) return goldBallImage._url;
     const c = document.createElement("canvas");
@@ -153,9 +175,14 @@
     return 0;
   }
 
+  function feetPos() {
+    const p = walkerPos();
+    return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, groundOf());
+  }
+
   function markerPos() {
     const p = walkerPos();
-    return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, groundOf() + 2.6);
+    return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, groundOf() + 16);
   }
 
   function addBeacon() {
@@ -169,11 +196,20 @@
     const balls = viewer.scene.primitives.add(new Cesium.BillboardCollection({
       scene: viewer.scene
     }));
+    walker.body = balls.add({
+      position: feetPos(),
+      image: personImage(),
+      width: 8,
+      height: 16,
+      sizeInMeters: true,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      verticalOrigin: Cesium.VerticalOrigin.BOTTOM
+    });
     walker.ball = balls.add({
       position: markerPos(),
       image: goldBallImage(),
-      width: 84,
-      height: 84,
+      width: 96,
+      height: 96,
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
       verticalOrigin: Cesium.VerticalOrigin.CENTER
     });
@@ -196,6 +232,10 @@
   }
 
   function updateBeacon() {
+    if (walker.body) {
+      walker.body.position = feetPos();
+      walker.body.show = walker.on;
+    }
     if (!walker.ball) return;
     const pos = markerPos();
     walker.ball.position = pos;
@@ -243,8 +283,8 @@
   async function loadBody(kind) {
     const model = await Cesium.Model.fromGltfAsync({
       url: "models/xbot.glb",
-      scale: kind === "self" ? 98 : 100,
-      minimumPixelSize: 64,
+      scale: kind === "self" ? 400 : 2000,
+      minimumPixelSize: 220,
       incrementallyLoadTextures: true
     });
     try {
