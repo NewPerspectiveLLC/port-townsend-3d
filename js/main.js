@@ -241,25 +241,25 @@
   }
 
   async function loadBody(kind) {
-    const model = await Promise.race([
-      Cesium.Model.fromGltfAsync({
-        url: "models/xbot.glb",
-        scale: kind === "self" ? 0.98 : 1,
-        incrementallyLoadTextures: true
-      }),
-      new Promise(function (_, reject) {
-        setTimeout(function () { reject(new Error("gltf timeout")); }, 10000);
-      })
-    ]);
+    const model = await Cesium.Model.fromGltfAsync({
+      url: "models/xbot.glb",
+      scale: kind === "self" ? 98 : 100,
+      minimumPixelSize: 64,
+      incrementallyLoadTextures: true
+    });
+    try {
+      model.color = Cesium.Color.fromCssColorString("#e8b89a");
+      model.colorBlendMode = Cesium.ColorBlendMode.MIX;
+      model.colorBlendAmount = 0.35;
+      model.silhouetteColor = Cesium.Color.fromCssColorString("#ffd24a");
+      model.silhouetteSize = 1.4;
+    } catch (e) {}
     viewer.scene.primitives.add(model);
-    await Promise.race([
-      new Promise(function (resolve) {
-        if (model.ready) resolve();
-        else if (model.readyEvent) model.readyEvent.addEventListener(resolve);
-        else resolve();
-      }),
-      new Promise(function (resolve) { setTimeout(resolve, 4000); })
-    ]);
+    await new Promise(function (resolve) {
+      if (model.ready) resolve();
+      else if (model.readyEvent) model.readyEvent.addEventListener(resolve);
+      else resolve();
+    });
     return model;
   }
 
@@ -1115,6 +1115,10 @@
       opts.geocoder = Cesium.IonGeocodeProviderType.GOOGLE;
     }
     viewer = new Cesium.Viewer("cesiumContainer", opts);
+    try {
+      viewer.scene.light = new Cesium.SunLight();
+      viewer.scene.light.intensity = 3;
+    } catch (e) {}
     const geo = document.querySelector(".cesium-viewer-geocoderContainer");
     if (geo) geo.style.display = "none";
 
