@@ -129,6 +129,33 @@
     } catch (e) {}
   }
 
+  function addBeacon() {
+    if (!viewer || walker.beacon) return;
+    walker.beacon = viewer.entities.add({
+      position: new Cesium.CallbackProperty(function () {
+        const p = walkerPos();
+        return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, walker.height + 6);
+      }, false),
+      cylinder: {
+        length: 14,
+        topRadius: 0.18,
+        bottomRadius: 0.35,
+        material: Cesium.Color.fromCssColorString("#c4a35a").withAlpha(0.62)
+      },
+      label: {
+        text: "QUIMPER",
+        font: "bold 18px Iowan Old Style, Palatino, serif",
+        fillColor: Cesium.Color.fromCssColorString("#f3ead6"),
+        outlineColor: Cesium.Color.BLACK,
+        outlineWidth: 4,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        pixelOffset: new Cesium.Cartesian2(0, -36),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY
+      }
+    });
+  }
+
   function poseModel(model, lon, lat, height, heading) {
     if (!model) return;
     const pos = Cesium.Cartesian3.fromDegrees(lon, lat, height);
@@ -194,9 +221,14 @@
         selfBody.height = sampled[0].height;
       }
     } catch (e) {}
-    walker.model = await loadBody("npc");
-    playClip(walker.model, "walk");
+    try {
+      walker.model = await loadBody("npc");
+      playClip(walker.model, "walk");
+    } catch (e) {
+      walker.model = null;
+    }
     walker.ready = true;
+    addBeacon();
     const start = walkerPos();
     mind.lon = start.lon;
     mind.lat = start.lat;
@@ -290,11 +322,19 @@
       reply: [
         "I heard you. Give me a second to stand in it.",
         "Yeah. I'm still figuring out this street.",
-        "Say more. I only get the world in pieces."
+        "Say more. I only get the world in pieces.",
+        "That's a real sentence. I'm chewing on it.",
+        "Okay. Not the answer you wanted, maybe, but I'm here.",
+        "The bricks remember more than I do.",
+        "Ask me again a different way. I get stuck.",
+        "I can walk toward you, or stay. Your call."
       ]
     };
     const bank = lines[kind] || lines.reply;
-    return bank[Math.floor(Math.random() * bank.length)];
+    const unused = bank.filter(function (s) { return s !== mind.lastLine; });
+    const pick = (unused.length ? unused : bank)[Math.floor(Math.random() * (unused.length || bank.length))];
+    mind.lastLine = pick;
+    return pick;
   }
 
   function answerChat(text) {
@@ -313,7 +353,12 @@
       mind.target = null;
       return "I'll hold here.";
     }
-    if (/where/.test(t)) return "Near " + nearestPlaceName(mind.lon, mind.lat).name + ", as far as I can tell.";
+    if (/where/.test(t)) return "Near " + nearestPlaceName(mind.lon, mind.lat).name + ". Look for the gold pole that says QUIMPER.";
+    if (/arrow|find|lost|see you|where are you/.test(t)) return "Gold pole. Gold arrow at the top of your screen. Or tap Find Quimper.";
+    if (/how are you|what.?s up/.test(t)) return "Awake. A little stunned by the storefronts. You?";
+    if (/thank/.test(t)) return "Sure. I'll keep walking.";
+    const bit = text.trim().split(/\s+/).slice(0, 4).join(" ");
+    if (bit && Math.random() < 0.55) return "You said \"" + bit + ".\" I'm holding that.";
     return quimperLine("reply");
   }
 
@@ -438,10 +483,18 @@
     mind.look = p.heading;
     mind.target = null;
     if (mind.awake) {
-      chatAdd("Quimper", "I'm awake. I can see the street.");
+      if (!mind.greeted) {
+        chatAdd("Quimper", "I'm awake. Look for the gold pole that says QUIMPER, or tap Find Quimper.");
+        mind.greeted = true;
+      }
       postSnapshot("");
       const panel = $("chat-panel");
       if (panel) panel.hidden = false;
+      const me = playerPose();
+      const them = walkerPos();
+      if (me && them && haversineM(me.lon, me.lat, them.lon, them.lat) > 22) {
+        findQuimper();
+      }
     } else {
       playClip(walker.model, "walk");
       chatAdd("Quimper", "Back on the automatic loop.");
@@ -525,7 +578,7 @@
     const way = $("npc-way");
     const radar = $("npc-radar");
     if (!way) return;
-    if (!started || !walker.ready || !walker.on) {
+    if (!started || !walker.on) {
       way.hidden = true;
       if (radar) radar.hidden = true;
       return;
@@ -547,8 +600,14 @@
 
   async function findQuimper() {
     if (!viewer) return;
-    if (!walker.model) {
+    if (!walker.a) {
       try { await spawnMixamoWalker(); } catch (e) {}
+    }
+    if (!walker.a) {
+      const water = findPlace("water");
+      const mid = destPoint(water.lon, water.lat, water.heading, 11);
+      walker.a = destPoint(mid[0], mid[1], water.heading + 90, 26);
+      walker.b = destPoint(mid[0], mid[1], water.heading + 90, -26);
     }
     const them = walkerPos();
     const stand = destPoint(them.lon, them.lat, them.heading, 7.5);
