@@ -738,3 +738,70 @@ body.touch #speed-dash {
   font: inherit;
   font-size: 0.75rem;
 }
+
+#npc-way {
+  position: absolute;
+  top: calc(7.4rem + env(safe-area-inset-top, 0px));
+  right: calc(0.85rem + env(safe-area-inset-right, 0px));
+  z-index: 12;
+  pointer-events: none;
+  text-align: center;
+  min-width: 5.2rem;
+}
+#npc-arrow {
+  font-size: 1.55rem;
+  line-height: 1;
+  color: var(--gold);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.55);
+  transform-origin: 50% 60%;
+}
+#npc-dist {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--cream);
+  background: rgba(28, 36, 38, 0.62);
+  border: 1px solid rgba(196, 163, 90, 0.45);
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+}
+#npc-radar {
+  position: absolute;
+  top: calc(11.2rem + env(safe-area-inset-top, 0px));
+  right: calc(0.95rem + env(safe-area-inset-right, 0px));
+  width: 84px;
+  height: 84px;
+  z-index: 12;
+  pointer-events: none;
+}
+.radar-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(196, 163, 90, 0.55);
+  background: rgba(28, 36, 38, 0.48);
+}
+#radar-you {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--cream);
+  box-shadow: 0 0 0 2px rgba(28,36,38,0.6);
+}
+#radar-npc {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 8px rgba(196, 163, 90, 0.8);
+}
+#find-quimper-btn { border-color: rgba(196, 163, 90, 0.95); background: rgba(196, 163, 90, 0.32); }

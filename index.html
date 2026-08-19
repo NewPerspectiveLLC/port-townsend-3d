@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Port Townsend — photoreal 3D</title>
   <link rel="stylesheet" href="vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="css/style.css?v=16" />
+  <link rel="stylesheet" href="css/style.css?v=17" />
   <script>window.CESIUM_BASE_URL = "vendor/cesium/";</script>
   <script src="vendor/cesium/Cesium.js"></script>
 </head>
@@ -65,6 +65,7 @@
         <button id="people-btn" type="button" class="active">People</button>
         <button id="wake-btn" type="button">Wake up!</button>
         <button id="chat-toggle" type="button">Chat</button>
+        <button id="find-quimper-btn" type="button">Find Quimper</button>
       </div>
       <div id="wedge-btns">
         <button id="ra-wedge-btn" type="button">RA 12-wedge</button>
@@ -77,6 +78,15 @@
         <span class="n">N</span>
         <div id="compass-needle"></div>
       </div>
+    </div>
+    <div id="npc-way">
+      <div id="npc-arrow">▲</div>
+      <span id="npc-dist">Quimper</span>
+    </div>
+    <div id="npc-radar" aria-hidden="true">
+      <div class="radar-ring"></div>
+      <div id="radar-you"></div>
+      <div id="radar-npc"></div>
     </div>
     <div id="near-label">
       <strong id="near-name">Water Street</strong>
@@ -138,12 +148,8 @@
       <input id="chat-input" type="text" autocomplete="off" maxlength="280" placeholder="Talk to Quimper" />
       <button type="submit">Send</button>
     </form>
-    <div class="wire-row">
-      <input id="wire-input" type="password" autocomplete="off" spellcheck="false" placeholder="Webhook URL from Quimper street wire" />
-      <button id="wire-save" type="button">Set wire</button>
-    </div>
   </div>
   <div id="error-banner" hidden></div>
-  <script src="js/main.js?v=16"></script>
+  <script src="js/main.js?v=17"></script>
 </body>
 </html>

@@ -520,6 +520,52 @@
       .catch(function () {});
   }
 
+
+  function updateNpcWay() {
+    const way = $("npc-way");
+    const radar = $("npc-radar");
+    if (!way) return;
+    if (!started || !walker.ready || !walker.on) {
+      way.hidden = true;
+      if (radar) radar.hidden = true;
+      return;
+    }
+    const me = playerPose();
+    const them = walkerPos();
+    if (!me || !them) return;
+    way.hidden = false;
+    if (radar) radar.hidden = false;
+    const dist = haversineM(me.lon, me.lat, them.lon, them.lat);
+    const bear = bearingDeg(me.lon, me.lat, them.lon, them.lat);
+    const rel = angleDelta(me.heading, bear);
+    $("npc-arrow").style.transform = "rotate(" + rel + "deg)";
+    $("npc-dist").textContent = dist < 2.4 ? "Quimper is here" : "Quimper " + Math.round(dist) + " m";
+    const r = Math.min(34, dist * (34 / 90));
+    const rad = rel * Math.PI / 180;
+    $("radar-npc").style.transform = "translate(" + (Math.sin(rad) * r) + "px," + (-Math.cos(rad) * r) + "px)";
+  }
+
+  async function findQuimper() {
+    if (!viewer) return;
+    if (!walker.model) {
+      try { await spawnMixamoWalker(); } catch (e) {}
+    }
+    const them = walkerPos();
+    const stand = destPoint(them.lon, them.lat, them.heading, 7.5);
+    const look = (them.heading + 180) % 360;
+    await goTo({
+      id: "quimper",
+      name: "Quimper",
+      desc: "Right in front of you",
+      lon: stand[0],
+      lat: stand[1],
+      heading: look
+    });
+    if (!mind.awake) toggleWake();
+    const panel = $("chat-panel");
+    if (panel) panel.hidden = false;
+  }
+
   function sendChat(text) {
     const msg = (text || "").trim();
     if (!msg) return;
@@ -720,12 +766,7 @@
   $("wake-btn").addEventListener("click", toggleWake);
   $("chat-toggle").addEventListener("click", function () { $("chat-panel").hidden = !$("chat-panel").hidden; });
   $("chat-close").addEventListener("click", function () { $("chat-panel").hidden = true; });
-  $("wire-save").addEventListener("click", function () {
-    if (setWireUrl($("wire-input").value)) {
-      $("wire-input").value = "";
-      chatAdd("Quimper", "Wire is set. I can think from the other room now.");
-    }
-  });
+  if ($("find-quimper-btn")) $("find-quimper-btn").addEventListener("click", function () { findQuimper(); });
   $("chat-form").addEventListener("submit", function (e) {
     e.preventDefault();
     const input = $("chat-input");
@@ -1104,6 +1145,7 @@
 
     $("compass-needle").style.transform = "rotate(" + Cesium.Math.toDegrees(cam.heading) + "deg)";
     updateNearest(after);
+    updateNpcWay();
   }
 
   function updateNearest(carto) {
