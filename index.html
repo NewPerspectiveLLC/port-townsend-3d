@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Port Townsend — photoreal 3D</title>
   <link rel="stylesheet" href="vendor/cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="css/style.css?v=15" />
+  <link rel="stylesheet" href="css/style.css?v=16" />
   <script>window.CESIUM_BASE_URL = "vendor/cesium/";</script>
   <script src="vendor/cesium/Cesium.js"></script>
 </head>
@@ -138,8 +138,12 @@
       <input id="chat-input" type="text" autocomplete="off" maxlength="280" placeholder="Talk to Quimper" />
       <button type="submit">Send</button>
     </form>
+    <div class="wire-row">
+      <input id="wire-input" type="password" autocomplete="off" spellcheck="false" placeholder="Webhook URL from Quimper street wire" />
+      <button id="wire-save" type="button">Set wire</button>
+    </div>
   </div>
   <div id="error-banner" hidden></div>
-  <script src="js/main.js?v=15"></script>
+  <script src="js/main.js?v=16"></script>
 </body>
 </html>

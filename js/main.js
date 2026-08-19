@@ -1,6 +1,8 @@
 (function () {
   const TOKEN_KEY = "pt-cesium-ion-token";
   const SPEED_KEY = "pt-cesium-speeds";
+  const WIRE_KEY = "pt-cesium-quimper-wire";
+  const INTENT_URL = "data/quimper-intent.json";
   const EYE = 1.8;
   const FLY_AGL = 2.5;
   const DEFAULT_SPEEDS = { walk: 3.7, sprint: 7.4, fly: 40, rise: 10 };
@@ -437,12 +439,85 @@
     mind.target = null;
     if (mind.awake) {
       chatAdd("Quimper", "I'm awake. I can see the street.");
+      postSnapshot("");
       const panel = $("chat-panel");
       if (panel) panel.hidden = false;
     } else {
       playClip(walker.model, "walk");
       chatAdd("Quimper", "Back on the automatic loop.");
     }
+  }
+
+
+  let lastSayId = "";
+  let lastWireAt = 0;
+  let lastPollAt = 0;
+
+  function getWireUrl() {
+    return (localStorage.getItem(WIRE_KEY) || "").trim();
+  }
+
+  function setWireUrl(value) {
+    const v = (value || "").trim();
+    if (!v) return false;
+    localStorage.setItem(WIRE_KEY, v);
+    return true;
+  }
+
+  function streetSnapshot(chatLine) {
+    const me = walkerPos();
+    const p = playerPose();
+    const dist = p ? haversineM(me.lon, me.lat, p.lon, p.lat) : null;
+    const near = nearestPlaceName(me.lon, me.lat);
+    return {
+      npc: { lon: me.lon, lat: me.lat, heading: me.heading, height: walker.height },
+      player: p ? { lon: p.lon, lat: p.lat, heading: p.heading } : null,
+      dist: dist,
+      seen: !!(mind.seen),
+      awake: mind.awake,
+      near: near ? near.name : "",
+      chat: chatLine || ""
+    };
+  }
+
+  function postSnapshot(chatLine) {
+    const url = getWireUrl();
+    if (!url || !mind.awake) return;
+    const body = JSON.stringify(streetSnapshot(chatLine));
+    try {
+      fetch(url, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain" },
+        body: body
+      }).catch(function () {});
+    } catch (e) {}
+    lastWireAt = performance.now();
+  }
+
+  function applyIntent(data) {
+    if (!data || !mind.awake) return;
+    if (data.say && data.sayId && data.sayId !== lastSayId) {
+      lastSayId = data.sayId;
+      chatAdd("Quimper", data.say);
+    }
+    if (data.target && Number.isFinite(data.target.lon) && Number.isFinite(data.target.lat)) {
+      mind.target = { lon: data.target.lon, lat: data.target.lat, reason: data.target.reason || "quimper" };
+    }
+    if (data.target === null && data.sayId) {
+      mind.target = null;
+    }
+    if (Number.isFinite(data.look)) mind.look = data.look;
+  }
+
+  function pollIntent(now) {
+    if (!mind.awake) return;
+    if (now && now - lastPollAt < 3500) return;
+    lastPollAt = now || performance.now();
+    fetch(INTENT_URL + "?t=" + Date.now(), { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(applyIntent)
+      .catch(function () {});
   }
 
   function sendChat(text) {
@@ -461,6 +536,7 @@
       chatAdd("Quimper", "I can hear the words, but I can't see you from here.");
       return;
     }
+    postSnapshot(msg);
     setTimeout(function () { chatAdd("Quimper", answerChat(msg)); }, 380);
   }
 
@@ -644,6 +720,12 @@
   $("wake-btn").addEventListener("click", toggleWake);
   $("chat-toggle").addEventListener("click", function () { $("chat-panel").hidden = !$("chat-panel").hidden; });
   $("chat-close").addEventListener("click", function () { $("chat-panel").hidden = true; });
+  $("wire-save").addEventListener("click", function () {
+    if (setWireUrl($("wire-input").value)) {
+      $("wire-input").value = "";
+      chatAdd("Quimper", "Wire is set. I can think from the other room now.");
+    }
+  });
   $("chat-form").addEventListener("submit", function (e) {
     e.preventDefault();
     const input = $("chat-input");
