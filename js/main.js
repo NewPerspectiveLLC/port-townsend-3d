@@ -183,6 +183,11 @@
     return 0;
   }
 
+  const NPC_SKY = 90;
+  function npcHeight() {
+    return groundOf() + NPC_SKY;
+  }
+
   function feetPos() {
     const p = walkerPos();
     return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, groundOf());
@@ -190,7 +195,7 @@
 
   function markerPos() {
     const p = walkerPos();
-    return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, groundOf() + 16);
+    return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, npcHeight() + 80);
   }
 
   function colorAttr(css) {
@@ -236,7 +241,7 @@
 
   function updateDoll() {
     if (!walker.doll) return;
-    const show = walker.on && !walker.model;
+    const show = false;
     const d = walker.doll;
     const parts = [
       [d.head, 0, 0, 13.2],
@@ -261,7 +266,6 @@
       walker.a = destPoint(mid[0], mid[1], water.heading + 90, 26);
       walker.b = destPoint(mid[0], mid[1], water.heading + 90, -26);
     }
-    addDoll();
     const balls = viewer.scene.primitives.add(new Cesium.BillboardCollection({
       scene: viewer.scene
     }));
@@ -375,8 +379,8 @@
   }
 
   async function loadBody(kind) {
-    const giant = kind === "self" ? 4 : 8;
-    const mixamo = kind === "self" ? 400 : 800;
+    const giant = kind === "self" ? 4 : 28;
+    const mixamo = kind === "self" ? 400 : 4000;
     try {
       return await loadOneBody("models/xbot.glb", mixamo);
     } catch (e) {}
@@ -449,7 +453,7 @@
     mind.lon = lon;
     mind.lat = lat;
     mind.heading = hdg;
-    poseModel(walker.model, lon, lat, groundOf(), hdg);
+    poseModel(walker.model, lon, lat, npcHeight(), hdg);
   }
 
   function nearestPlaceName(lon, lat) {
@@ -585,7 +589,7 @@
     const face = mind.seen ? mind.look : (moving ? mind.heading : mind.look);
     mind.heading = moving ? mind.heading : mind.heading + angleDelta(mind.heading, face) * 0.08;
     playClip(walker.model, moving ? "walk" : "idle");
-    poseModel(walker.model, mind.lon, mind.lat, groundOf(), moving ? mind.heading : face);
+    poseModel(walker.model, mind.lon, mind.lat, npcHeight(), moving ? mind.heading : face);
   }
 
   function updateSelf(dt, now) {
@@ -789,15 +793,16 @@
       walker.b = destPoint(mid[0], mid[1], water.heading + 90, -26);
     }
     const them = walkerPos();
-    const stand = destPoint(them.lon, them.lat, them.heading, 7.5);
+    const stand = destPoint(them.lon, them.lat, them.heading, 70);
     const look = (them.heading + 180) % 360;
     await goTo({
       id: "quimper",
       name: "Quimper",
-      desc: "Right in front of you",
+      desc: "Look up",
       lon: stand[0],
       lat: stand[1],
-      heading: look
+      heading: look,
+      pitch: 28
     });
     if (Number.isFinite(lastGround)) walker.height = lastGround;
     updateBeacon();
@@ -1293,7 +1298,7 @@
       destination: Cesium.Cartesian3.fromDegrees(place.lon, place.lat, height),
       orientation: {
         heading: Cesium.Math.toRadians(place.heading),
-        pitch: Cesium.Math.toRadians(-8),
+        pitch: Cesium.Math.toRadians(place.pitch != null ? place.pitch : -8),
         roll: 0
       }
     });
