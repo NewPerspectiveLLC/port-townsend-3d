@@ -121,11 +121,19 @@
     model._ptClip = name;
     try {
       model.activeAnimations.removeAll();
-      model.activeAnimations.add({
-        name: name,
-        loop: Cesium.ModelAnimationLoop.REPEAT,
-        multiplier: 1
-      });
+      try {
+        model.activeAnimations.add({
+          name: name,
+          loop: Cesium.ModelAnimationLoop.REPEAT,
+          multiplier: 1
+        });
+      } catch (e) {
+        model.activeAnimations.add({
+          index: 0,
+          loop: Cesium.ModelAnimationLoop.REPEAT,
+          multiplier: 1
+        });
+      }
     } catch (e) {}
   }
 
@@ -185,6 +193,66 @@
     return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, groundOf() + 16);
   }
 
+  function colorAttr(css) {
+    return Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.fromCssColorString(css));
+  }
+
+  function makePart(geometry, color) {
+    return viewer.scene.primitives.add(new Cesium.Primitive({
+      geometryInstances: new Cesium.GeometryInstance({
+        geometry: geometry,
+        attributes: { color: colorAttr(color) }
+      }),
+      appearance: new Cesium.PerInstanceColorAppearance({
+        flat: true,
+        translucent: false,
+        closed: true
+      }),
+      asynchronous: false
+    }));
+  }
+
+  function addDoll() {
+    if (!viewer || walker.doll) return;
+    walker.doll = {
+      head: makePart(new Cesium.SphereGeometry({ radius: 1.15 }), "#e6b089"),
+      torso: makePart(new Cesium.EllipsoidGeometry({ radii: new Cesium.Cartesian3(1.35, 0.75, 2.2) }), "#8a3a32"),
+      hips: makePart(new Cesium.EllipsoidGeometry({ radii: new Cesium.Cartesian3(1.15, 0.7, 0.7) }), "#2c3a4d"),
+      lArm: makePart(new Cesium.CylinderGeometry({ length: 4.2, topRadius: 0.32, bottomRadius: 0.38 }), "#e6b089"),
+      rArm: makePart(new Cesium.CylinderGeometry({ length: 4.2, topRadius: 0.32, bottomRadius: 0.38 }), "#e6b089"),
+      lLeg: makePart(new Cesium.CylinderGeometry({ length: 5.4, topRadius: 0.42, bottomRadius: 0.5 }), "#2c3a4d"),
+      rLeg: makePart(new Cesium.CylinderGeometry({ length: 5.4, topRadius: 0.42, bottomRadius: 0.5 }), "#2c3a4d")
+    };
+  }
+
+  function dollMatrix(east, north, up) {
+    const p = walkerPos();
+    const origin = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, groundOf());
+    const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(p.heading || 0), 0, 0);
+    const frame = Cesium.Transforms.headingPitchRollToFixedFrame(origin, hpr);
+    const world = Cesium.Matrix4.multiplyByPoint(frame, new Cesium.Cartesian3(east, north, up), new Cesium.Cartesian3());
+    return Cesium.Transforms.headingPitchRollToFixedFrame(world, hpr);
+  }
+
+  function updateDoll() {
+    if (!walker.doll) return;
+    const show = walker.on && !walker.model;
+    const d = walker.doll;
+    const parts = [
+      [d.head, 0, 0, 13.2],
+      [d.torso, 0, 0, 9.4],
+      [d.hips, 0, 0, 6.6],
+      [d.lArm, -1.7, 0, 9.6],
+      [d.rArm, 1.7, 0, 9.6],
+      [d.lLeg, -0.55, 0, 2.7],
+      [d.rLeg, 0.55, 0, 2.7]
+    ];
+    for (let i = 0; i < parts.length; i++) {
+      parts[i][0].modelMatrix = dollMatrix(parts[i][1], parts[i][2], parts[i][3]);
+      parts[i][0].show = show;
+    }
+  }
+
   function addBeacon() {
     if (!viewer || walker.ball) return;
     if (!walker.a) {
@@ -193,18 +261,10 @@
       walker.a = destPoint(mid[0], mid[1], water.heading + 90, 26);
       walker.b = destPoint(mid[0], mid[1], water.heading + 90, -26);
     }
+    addDoll();
     const balls = viewer.scene.primitives.add(new Cesium.BillboardCollection({
       scene: viewer.scene
     }));
-    walker.body = balls.add({
-      position: feetPos(),
-      image: personImage(),
-      width: 8,
-      height: 16,
-      sizeInMeters: true,
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      verticalOrigin: Cesium.VerticalOrigin.BOTTOM
-    });
     walker.ball = balls.add({
       position: markerPos(),
       image: goldBallImage(),
@@ -232,10 +292,7 @@
   }
 
   function updateBeacon() {
-    if (walker.body) {
-      walker.body.position = feetPos();
-      walker.body.show = walker.on;
-    }
+    updateDoll();
     if (!walker.ball) return;
     const pos = markerPos();
     walker.ball.position = pos;
@@ -280,27 +337,50 @@
     return { lon: lon, lat: lat, heading: heading };
   }
 
-  async function loadBody(kind) {
-    const model = await Cesium.Model.fromGltfAsync({
-      url: "models/xbot.glb",
-      scale: kind === "self" ? 400 : 2000,
-      minimumPixelSize: 220,
-      incrementallyLoadTextures: true
-    });
+  function bodyShader() {
+    try {
+      return new Cesium.CustomShader({
+        lightingModel: Cesium.LightingModel.UNLIT
+      });
+    } catch (e) {
+      return undefined;
+    }
+  }
+
+  async function loadOneBody(url, scale) {
+    const opts = {
+      url: url,
+      scale: scale,
+      minimumPixelSize: 180,
+      incrementallyLoadTextures: true,
+      lightColor: new Cesium.Cartesian3(1.8, 1.7, 1.5)
+    };
+    const shader = bodyShader();
+    if (shader) opts.customShader = shader;
+    const model = await Promise.race([
+      Cesium.Model.fromGltfAsync(opts),
+      new Promise(function (_, reject) {
+        setTimeout(function () { reject(new Error("gltf timeout")); }, 8000);
+      })
+    ]);
     try {
       model.color = Cesium.Color.fromCssColorString("#e8b89a");
       model.colorBlendMode = Cesium.ColorBlendMode.MIX;
-      model.colorBlendAmount = 0.35;
+      model.colorBlendAmount = 0.3;
       model.silhouetteColor = Cesium.Color.fromCssColorString("#ffd24a");
-      model.silhouetteSize = 1.4;
+      model.silhouetteSize = 1.6;
     } catch (e) {}
     viewer.scene.primitives.add(model);
-    await new Promise(function (resolve) {
-      if (model.ready) resolve();
-      else if (model.readyEvent) model.readyEvent.addEventListener(resolve);
-      else resolve();
-    });
     return model;
+  }
+
+  async function loadBody(kind) {
+    const giant = kind === "self" ? 4 : 8;
+    const mixamo = kind === "self" ? 400 : 800;
+    try {
+      return await loadOneBody("models/xbot.glb", mixamo);
+    } catch (e) {}
+    return loadOneBody("models/cesium-man.glb", giant);
   }
 
   async function spawnMixamoWalker() {
@@ -1139,7 +1219,7 @@
     Cesium.Ion.defaultAccessToken = token;
 
     const opts = {
-      globe: false,
+      globe: true,
       baseLayerPicker: false,
       timeline: false,
       animation: false,
@@ -1155,6 +1235,7 @@
       opts.geocoder = Cesium.IonGeocodeProviderType.GOOGLE;
     }
     viewer = new Cesium.Viewer("cesiumContainer", opts);
+    try { viewer.scene.globe.show = false; } catch (e) {}
     try {
       viewer.scene.light = new Cesium.SunLight();
       viewer.scene.light.intensity = 3;
